@@ -37,7 +37,8 @@
 //!   Mitgliedschaft (vorbeugend) und kann befristet sein (`until`, Datum wie oben). ENDE einer befristeten Sperre
 //!   (H8): nach dem Tag `until` entfällt sie wie eine abgelaufene Mitgliedschaft (vor jedem Lesen entfernt, fehlt
 //!   in `blocks`), Verlauf `HistoryKind::Unblocked { expired: true }`, Änderung `ChangeKind::Block`; die Einträge
-//!   der Person zählen wieder (abgelaufene Mitgliedschaften bleiben abgelaufen).
+//!   der Person zählen wieder (abgelaufene Mitgliedschaften bleiben abgelaufen); das ist keine neue Vergabe:
+//!   Einträge in geschützte Ziele prüft `appoint.rs` STRUKTURELL beim Setzen, auch für gesperrte Personen (B3).
 //! - Grund: eine Sperre ist umkehrbar und nachvollziehbar (Verdacht, Klärung), ein Ausschluss endgültig; nur die
 //!   Sperre wirkt gegen Rechte, die über Rollen oder Vererbung kommen.
 //! - Wer: `Manage` am Ziel (Gruppe bzw. Rolle); nie eine KI (sie hat nie `Manage`); eine KI kann gesperrt werden.
@@ -45,7 +46,9 @@
 //! - DER INSTALLIERENDE IST NIE SPERRBAR (B2; ADR 0056 Punkt 1; Nutzerantwort 15 "Admins können die Sperre
 //!   ändern"): `block` gegen ihn ist `LastManager`; `Reason::Installer` geht jeder Sperre vor (auch Sperren aus
 //!   Altdaten wirken gegen ihn nicht). `blocks` und `unblock` stehen ihm an JEDEM Ziel offen, auch ohne `Manage`.
-//!   Gesperrte Admins entsperrt, wer `Manage` am Ziel hat, und immer der Installierende.
+//!   Gesperrte Admins entsperrt, wer `Manage` am Ziel hat, und immer der Installierende. An einem GESCHÜTZTEN Ziel
+//!   braucht `unblock` zusätzlich `admin_appointer` mit der Geltung der Rollen des Ziels (B3, `appoint.rs`;
+//!   Ausnahme: der Installierende); sonst hebt ein Verwalter die Sicherheitssperre eines Inhabers auf.
 //! - Auskunft und Audit: Notiz (`note`) und Verlauf (`Blocked`/`Unblocked`) sehen Inhaber von `Manage` und der
 //!   Installierende; die gesperrte Person sieht ihre Sperre über `may_do` (`Reason::Blocked`) und `in_force`
 //!   ihrer Einträge (Art. 15).

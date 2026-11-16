@@ -169,7 +169,8 @@ pub enum FindingKind {
     RoleNameTaken(ObjectId),
     /// Befristete Mitgliedschaft abgelaufen: Grund für ein geplantes `remove` (`limits.rs`).
     MembershipExpired(PersonRef),
-    /// Sperre, die Kanidm nicht abbilden kann (Person kommt nur über einen Bogen hinein; `limits.rs`).
+    /// Sperre, die Kanidm nicht abbilden kann (Person kommt nur über einen Bogen hinein; `limits.rs`). Geschütztes
+    /// Ziel: der Befund schlägt vor, das Konto in Kanidm zu sperren (`account_expire`; der Mensch führt es aus, H7).
     BlockNotMirrored {
         person: PersonRef,
         target: BlockTarget,

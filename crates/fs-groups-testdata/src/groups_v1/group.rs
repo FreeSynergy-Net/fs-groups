@@ -56,6 +56,9 @@ pub struct Group {
     /// KI-Konten sind nie direkt in Menschengruppen (`Error::AiNesting`, `nesting.rs`). Rechte bekommt sie nur
     /// ausdrücklich und einzeln, `Manage` nie.
     pub ai: bool,
+    /// "KI erlaubt" (`ai_access.rs`): KI-Teilnahme in Räumen der Gruppe und Rechte von KI-Gruppen an ihr; NIE
+    /// Mitgliedschaft. Fest `false` bei `sensitive` und Admin-Recht; eine fragende KI liest immer `false`.
+    pub ai_allowed: bool,
     /// Soll diese Gruppe in Verzeichnisse (Kanidm) gespiegelt werden (ADR 0056 Punkt 8: nur wer Rechte braucht)?
     /// Bei `sensitive` und bei `ai` immer `false` (`Error::Invalid`, `SensitiveNotMirrored`, `AiNotMirrored`).
     pub mirror: bool,
@@ -80,6 +83,8 @@ pub struct GroupSummary {
     pub direct_members: Option<u32>,
     pub sensitive: bool,
     pub ai: bool,
+    /// "KI erlaubt" (`ai_access.rs`); `None` für eine fragende KI (sie sieht das Feld nie).
+    pub ai_allowed: Option<bool>,
     pub mirror: bool,
     /// `None` = nicht gelöscht; sonst Ende der Papierkorbfrist.
     pub restorable_until: Option<Utc>,
@@ -119,6 +124,8 @@ pub struct GroupDraft {
     pub visibility: Visibility,
     pub sensitive: bool,
     pub ai: bool,
+    /// "KI erlaubt", Voreinstellung `AI_ALLOWED_DEFAULT` (`false`); nur ein Mensch mit `Manage` (`ai_access.rs`).
+    pub ai_allowed: bool,
     pub mirror: bool,
 }
 
@@ -137,6 +144,9 @@ pub struct GroupPatch {
     /// `false` bei einer KI-Gruppe mit KI-Mitgliedern (sonst Umweg an der Kantenprüfung vorbei). Setzen darf es
     /// nur, wer `Manage` hat, nie eine KI.
     pub ai: Option<bool>,
+    /// "KI erlaubt": nur ein Mensch mit `Manage`; `true` an sensibler oder admin-wirksamer Gruppe:
+    /// `AiNotAllowed`; "nein" widerruft sofort (`ai_access.rs`).
+    pub ai_allowed: Option<bool>,
     pub mirror: Option<bool>,
 }
 

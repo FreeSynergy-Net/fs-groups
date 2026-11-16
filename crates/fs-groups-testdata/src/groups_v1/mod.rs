@@ -7,7 +7,8 @@
 //! mit Modus je Kante). Ordner: ADR 0043, Dateien <= 300 Zeilen; Hash = `tools/hash-ordner.sh groups_v1`. Dateien:
 //! `mod.rs` (dieser Kopf), `shared.rs` (`pub use` der Basistypen aus `fs-types`), `group.rs`, `nesting.rs`
 //! (Kante, Modus, Zustimmung, Regel der wirksamen Mitglieder), `members.rs`, `limits.rs` (Befristung, Sperre),
-//! `appoint.rs` (Recht "Admins benennen", alle Wege, Geltung, Selbstvergabe, Türsteher),
+//! `appoint.rs` (Recht "Admins benennen", alle Wege, Geltung, Selbstvergabe, Türsteher), `ai_access.rs`
+//! (Gruppenfeld "KI erlaubt": Bedeutung, Wirkung, Unsichtbarkeit für KI),
 //! `rights.rs`, `errors.rs`, `api.rs`
 //! (Trait `Groups`), `mirror.rs` (Trait `Mirroring`, verbrauchter Trait `GroupDirectory`), `provided.rs` (Traits
 //! `GroupMembers` für Kalender und Tasks, `RoleBook` für fs-people), `consumed.rs` (verbrauchte Traits von
@@ -74,8 +75,15 @@
 //   `pub use` angeboten; der Modulname ist nur Ablage.
 // - missing_errors_doc: jede Methode nennt ihre Fehler im Doc-Satz, die Ursachen stehen typisiert in
 //   `errors.rs`; eine `# Errors`-Rubrik je Methode wiederholte nur.
-#![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
+// - struct_excessive_bools: `Group`/`GroupDraft` tragen vier UNABHÄNGIGE Ja/Nein-Spalten (`sensitive`, `ai`,
+//   `ai_allowed`, `mirror`; typisiert `INTEGER NOT NULL`, PLAN §3); kein Zustandsautomat, Gegenregeln in den Docs.
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::missing_errors_doc,
+    clippy::struct_excessive_bools
+)]
 
+mod ai_access;
 mod api;
 mod appoint;
 mod consumed;
@@ -93,6 +101,7 @@ mod role_holders;
 mod role_mirror;
 pub mod shared;
 
+pub use ai_access::*;
 pub use api::*;
 pub use appoint::*;
 pub use consumed::*;

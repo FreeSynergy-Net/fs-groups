@@ -28,7 +28,7 @@ pub enum Right {
 /// sehen deren Mitgliederliste und werden mit eingeladen). Eine KI-Gruppe als Inhaberin gilt nur für ihre
 /// direkten Mitglieder (sie hat nie eine wirksame Kante) und nie für `Manage` (`Error::AgentNotAdmin`); an einer
 /// Gruppe mit Admin-Recht oder einer sensiblen Gruppe hat eine KI gar keinen Zugriff (auch nicht `Read`,
-/// `Error::AgentNotAdmin`).
+/// `Error::AgentNotAdmin`). Sonst nur bei "KI erlaubt" (`ai_access.rs`), bei "nein" `Error::AiNotAllowed`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Grant {
     pub id: ObjectId,
@@ -267,6 +267,12 @@ pub enum HistoryKind {
     Unblocked {
         person: PersonRef,
         expired: bool,
+    },
+    /// "KI erlaubt" geändert (`ai_access.rs`); `forced` = im selben Schritt erzwungen (Admin-Recht, sensibel).
+    /// Für eine fragende KI nie ausgeliefert.
+    AiAllowedChanged {
+        allowed: bool,
+        forced: bool,
     },
 }
 

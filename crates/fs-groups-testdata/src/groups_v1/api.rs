@@ -3,7 +3,7 @@
 //!
 //! Pattern: Repository + Port (Trait; alle Methoden Pflicht, kein Null Object).
 
-use super::shared::{Date, ObjectId, Page, PersonRef, Place, Reference, Revision, Utc};
+use super::shared::{Date, ObjectId, Page, PageCursor, PersonRef, Reference, Revision, Utc};
 use super::{
     AdmissionBasis, Block, BlockTarget, Change, Decision, Deleted, EffectiveGroup, EffectiveMember,
     Grant, Group, GroupDraft, GroupPatch, GroupQuery, GroupSummary, HistoryEntry, Invitation,
@@ -49,7 +49,7 @@ pub trait Groups: Send + Sync {
     async fn list(
         &self,
         query: &GroupQuery,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Page<GroupSummary>>;
     /// Eine gelöschte Gruppe ergibt `None`; ebenso eine Admin- oder sensible Gruppe für eine fragende KI.
@@ -155,7 +155,7 @@ pub trait Groups: Send + Sync {
     async fn members(
         &self,
         group: ObjectId,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Page<Membership>>;
     /// Wirksame Mitglieder (Regel `nesting.rs`: direkt und über die Hülle des Mitgliedsgraphen), je Person einmal
@@ -163,7 +163,7 @@ pub trait Groups: Send + Sync {
     async fn effective_members(
         &self,
         group: ObjectId,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Page<EffectiveMember>>;
     /// `AddMembers` nötig; mit Rolle ZUSÄTZLICH `Manage` an der Rolle ("Rolle vergeben", wie `assign_role`;
@@ -229,8 +229,8 @@ pub trait Groups: Send + Sync {
         role: Option<&RoleRef>,
         expires: Option<Utc>,
     ) -> Result<Invitation>;
-    /// Nur die eingeladene Person. Annehmen legt die Mitgliedschaft an (ein Schritt, atomar); geschützte Gruppe:
-    /// geprüft wird das Recht der EINLADENDEN Person zum Zeitpunkt der Annahme (`appoint.rs`).
+    /// Nur die eingeladene Person. Annehmen legt die Mitgliedschaft an (ein Schritt, atomar); neu geprüft werden
+    /// `AddMembers` und (geschützt) das Recht der EINLADENDEN Person zum Zeitpunkt der Annahme (`appoint.rs`).
     async fn answer_invitation(
         &self,
         invitation: ObjectId,
@@ -259,7 +259,7 @@ pub trait Groups: Send + Sync {
     /// Vergebene Rechte einer Gruppe (`Read` nötig).
     async fn grants(&self, group: ObjectId) -> Result<Vec<Grant>>;
     /// `Manage` nötig. Gleiches Recht an gleichen Inhaber: `AlreadyThere`. `Manage` an KI: `AgentNotAdmin`;
-    /// an einer Gruppe mit Admin-Recht oder einer sensiblen Gruppe jedes Recht an eine KI: `AgentNotAdmin`.
+    /// Admin-Recht oder sensibel jedes Recht an eine KI: `AgentNotAdmin`; "KI erlaubt: nein": `AiNotAllowed`.
     async fn grant(&self, group: ObjectId, holder: &PersonRef, right: Right) -> Result<Grant>;
     /// `Manage` nötig; `LastManager` möglich.
     async fn revoke_grant(&self, grant: ObjectId, expected: Revision) -> Result<()>;
@@ -280,19 +280,19 @@ pub trait Groups: Send + Sync {
         note: Option<&str>,
         until: Option<Date>,
     ) -> Result<Block>;
-    /// Sperre aufheben (`Manage` am Ziel; der Installierende immer, `limits.rs`).
+    /// Sperre aufheben (`Manage` am Ziel, geschützt auch `admin_appointer`; der Installierende immer; `appoint.rs`).
     async fn unblock(&self, block: ObjectId, expected: Revision) -> Result<()>;
     /// Sperren an einem Ziel (`Manage` nötig; der Installierende immer), neueste zuerst.
     async fn blocks(&self, target: BlockTarget) -> Result<Vec<Block>>;
 
     // ---- Beobachten und Protokoll (group.read)
     /// Änderungen seit `since` (`None` = ab jetzt), älteste zuerst; nur, was die fragende Person sehen darf.
-    async fn changes(&self, since: Option<&Place>, size: usize) -> Result<Page<Change>>;
+    async fn changes(&self, since: Option<&PageCursor>, size: usize) -> Result<Page<Change>>;
     /// Protokoll einer Gruppe, älteste zuerst (`Read` nötig).
     async fn history(
         &self,
         group: ObjectId,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Page<HistoryEntry>>;
 }

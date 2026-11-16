@@ -48,6 +48,8 @@ pub enum Field {
     Concept,
     /// Letzter Tag einer Befristung oder Sperre (`until`).
     Until,
+    /// "KI erlaubt" (`ai_access.rs`): `true` an einer KI-Gruppe oder beim Anlegen einer sensiblen Gruppe.
+    AiAllowed,
 }
 
 /// Was an einem Feld falsch ist.
@@ -196,7 +198,8 @@ pub enum Error {
         path: Vec<ObjectId>,
     },
     /// Eine Person bekäme eine admin-wirksame Rolle neu oder länger (Aufnehmen in eine geschützte Gruppe, Rolle
-    /// vergeben, Kante, Verlängern, Wiederherstellen, Annehmen gegen das Recht der einladenden Person), ohne dass
+    /// vergeben, Kante, Verlängern, Wiederherstellen, Annehmen gegen das Recht der einladenden Person, `unblock`
+    /// an einem geschützten Ziel; STRUKTURELL, auch wenn die Betroffenen gerade nicht zählen, B3), ohne dass
     /// die handelnde Person "Admins benennen" (`admin_appointer`) wirksam und mit passender GELTUNG hält
     /// (Entscheidung 31, alle Wege in `appoint.rs`); `target` = Gruppe bzw. Rolle.
     AppointerRequired {
@@ -204,9 +207,16 @@ pub enum Error {
     },
     /// Selbstvergabe (`appoint.rs`): die handelnde Person bekäme selbst eine admin-wirksame Rolle neu oder länger
     /// (auch `admin_appointer`, auch Selbstaufnahme in eine geschützte Gruppe); ein ZWEITER Inhaber muss handeln
-    /// oder zustimmen. Nicht für den Installierenden. Nichts geschrieben.
+    /// oder zustimmen; ebenso `unblock` der eigenen Sperre und `admit_member` mit `basis.basis` = aufzunehmende
+    /// Person (H12). Ausnahme: der Installierende (oberster Admin, `Reason::Installer`). Nichts geschrieben.
     SecondAppointerRequired {
         target: ObjectId,
+    },
+    /// Die Gruppe hat "KI erlaubt: nein" (`ai_access.rs`): Recht an eine KI-Gruppe oder ein KI-Konto,
+    /// `restore` mit solchen Rechten, KI-Teilnahme in einem Raum der Gruppe; ebenso `true` an einer sensiblen oder
+    /// admin-wirksamen Gruppe (`update`). Nie an eine fragende KI. Nichts geschrieben.
+    AiNotAllowed {
+        group: ObjectId,
     },
     /// Admin-Rolle oder `Manage` für eine als KI markierte Person (ADR 0056 Punkt 6); auch: eine KI legt eine
     /// Rolle an, oder `Role::managers` wäre eine KI-Gruppe.

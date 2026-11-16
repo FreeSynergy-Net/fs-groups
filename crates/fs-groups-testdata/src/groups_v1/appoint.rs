@@ -18,21 +18,33 @@
 //! braucht das Recht nicht, wie die direkte Vergabe einer sensiblen Rolle (`assign_role`); selbstverwaltet
 //! verlangt sie aber `Confirm` oder `Vote` und keine Gruppen-Links (sonst `ModeConflict(SelfManaged)`).
 //!
-//! REGEL: Jede Handlung, durch die eine Person eine admin-wirksame Rolle NEU bekommt oder LÄNGER behält, braucht
-//! zusätzlich zum bisherigen Recht das wirksam gehaltene `admin_appointer` (nicht gesperrt, nicht abgelaufen) mit
-//! passender GELTUNG, sonst `Error::AppointerRequired { target }`. Das sind (vollständig):
+//! REGEL: Jede Handlung, durch die eine Person eine admin-wirksame Rolle NEU bekommt oder LÄNGER behält (geprüft
+//! STRUKTURELL, unten), braucht zusätzlich zum bisherigen Recht das wirksam gehaltene `admin_appointer` (nicht
+//! gesperrt, nicht abgelaufen) mit passender GELTUNG, sonst `Error::AppointerRequired { target }`. Vollständig:
 //! - Mitglieder: `add_member`, `invite`, Annehmen (unten), `set_role`, `admit_member` (Türsteher, unten);
 //!   `set_membership_until` in einer geschützten Gruppe beim VERLÄNGERN und ENTFRISTEN (Kürzen nicht).
 //! - Rollen: `assign_role` (Person oder Gruppe), `role_nest`, `change_role_nesting_mode`, `role_update(kind)`,
 //!   `answer_role_request` (geprüft wird die zustimmende Person), `role_restore`.
 //! - Gruppen-Kanten: `request_nesting`, `answer_nesting_request` (die zustimmende Person), `change_nesting_mode`
-//!   (Verstärken, Richtungswechsel), wenn durch die Kante Mitglieder wirksam in eine geschützte Gruppe fließen
+//!   (Verstärken, Richtungswechsel), wenn durch die Kante Mitglieder in eine geschützte Gruppe fließen KÖNNEN
 //!   (`BottomUp`: das Kind und alles, was in es fließt, unter eine geschützte Gruppe; `TopDown`: die Eltern über
-//!   einer geschützten). Geprüft wird, wer die Kante wirksam setzt: bei `Linked` die fragende Person, bei
-//!   `Requested` die zustimmende beim Zustimmen (die Anfrage selbst braucht das Recht nicht). `Single` nie.
-//! - `restore` (Gruppe) und `role_restore`: bekäme dadurch jemand eine admin-wirksame Rolle zurück (Mitglieder,
-//!   Zuordnungen, Kanten), braucht die wiederherstellende Person das Recht; sonst `AppointerRequired`, nichts
-//!   zurückgeholt. Abgelaufene Mitgliedschaften bleiben abgelaufen (`limits.rs`).
+//!   einer geschützten; auch leer oder ohne heute zählende Person). Geprüft wird, wer die Kante wirksam setzt:
+//!   bei `Linked` die fragende Person, bei `Requested` die zustimmende beim Zustimmen (die Anfrage selbst braucht
+//!   das Recht nicht). `Single` nie.
+//! - `restore` (Gruppe) und `role_restore`: holt es Einträge zurück, die eine admin-wirksame Rolle geben (Mitglieder,
+//!   Zuordnungen, Kanten; auch gesperrte oder ungeklärte), braucht die wiederherstellende Person das Recht; sonst
+//!   `AppointerRequired`, nichts zurückgeholt. Abgelaufene Mitgliedschaften bleiben abgelaufen (`limits.rs`).
+//! - Sperren (B3): `unblock` an einem GESCHÜTZTEN Ziel (Gruppe wie oben oder admin-wirksame Rolle), Geltung = die
+//!   der Rollen des Ziels. Ausnahme: der Installierende (oberster Admin, `Reason::Installer`). `block` braucht es nie.
+//!
+//! STRUKTURELL (B3, Opus-Delta-Check Runde 4): geprüft wird, was eine Handlung in ein geschütztes Ziel BRINGT oder
+//! ein Ziel geschützt MACHT (Person, Mitgliedschaft, Zuordnung, Kante, Rolle), NICHT, wer heute wirksam zählt. Das
+//! Recht braucht es auch, wenn die Betroffenen gerade nicht zählen: gesperrt, `KindMismatch`, unbekannter
+//! KI-Status, leeres Kind. Die GELTUNG kommt von den admin-wirksamen Rollen des Ziels, nicht von der Hülle. Wird
+//! eine so gesetzte Person später wirksam, ohne dass jemand handelt (befristete Sperre läuft ab; fs-people meldet
+//! "Mensch" für einen vorher unbekannten Status), ist das keine neue Vergabe: geprüft wurde beim Setzen. Damit sind
+//! geschlossen: Sperre → Kante (`BottomUp`, `Linked`) → `unblock`; Sperre mit `until` → Kante → Ablauf;
+//! unbekannter Status → Kante → "Mensch"; `restore` gesperrter oder ungeklärter Einträge.
 //!
 //! GELTUNG: Das Recht muss die Geltung JEDER admin-wirksamen Rolle abdecken, die eine Person dadurch bekommt,
 //! nicht die Eintrittsgruppe. Geltung der erworbenen Rolle = `within` der Zuordnung bzw. die Gruppe von
@@ -42,17 +54,21 @@
 //!
 //! ANNEHMEN: geprüft wird das Recht der EINLADENDEN Person (`Invitation::invited_by`) ZUM ZEITPUNKT DER ANNAHME
 //! (die eingeladene hält es nie). Fehlt es: `AppointerRequired`, nichts geschrieben, die Einladung bleibt offen
-//! (Widerruf durch die Verwaltung). Zusätzlich: wird eine Gruppe GESCHÜTZT (durch `assign_role`, `set_role`,
-//! Kante, Moduswechsel, `role_nest`, `role_update`, Zustimmen), zieht der Anbieter im selben Schritt alle offenen
-//! Einladungen dieser Gruppe und jeder dadurch geschützten Gruppe zurück (`InvitationState::Revoked`, Verlauf
-//! `InvitationClosed`, Akteur = handelnde Person); neue Einladungen prüft `invite` mit dem Recht.
+//! (Widerruf durch die Verwaltung). Ebenso neu geprüft (H13, jede Gruppe): ihr `AddMembers` an der Gruppe (nicht
+//! gesperrt); fehlt es: `Forbidden { group, right: AddMembers }`, nichts geschrieben, Einladung bleibt offen.
+//! Zusätzlich: wird eine Gruppe GESCHÜTZT (durch `assign_role`, `set_role`, Kante, Moduswechsel, `role_nest`,
+//! `role_update`, Zustimmen), zieht der Anbieter im selben Schritt alle offenen Einladungen dieser Gruppe und
+//! jeder dadurch geschützten Gruppe zurück (`InvitationState::Revoked`, Verlauf `InvitationClosed`, Akteur =
+//! handelnde Person); neue Einladungen prüft `invite` mit dem Recht.
 //!
 //! SELBSTVERGABE (feste Regel, Strategie 16.11. Frage 2): bekommt die HANDELNDE Person (beim Annehmen: die
 //! einladende; beim Zustimmen: die zustimmende) dadurch selbst eine admin-wirksame Rolle neu oder länger (auch
-//! `admin_appointer` selbst, auch über eine Gruppe, in der sie wirksam Mitglied ist, auch Selbstaufnahme in eine
-//! geschützte Gruppe), genügt ihr Recht nicht: `Error::SecondAppointerRequired { target }`. Den Schritt tut ein
-//! ZWEITER wirksamer Inhaber mit passender Geltung (selbst oder als Zustimmender), oder der Türsteher nach der
-//! Aufnahme-Regel (die beantragende Person stimmt nicht mit). Ausnahme: der Start durch den Installierenden.
+//! `admin_appointer` selbst, auch über eine Gruppe, in der sie Mitglied ist, auch Selbstaufnahme in eine
+//! geschützte Gruppe, auch `unblock` der eigenen Sperre), genügt ihr Recht nicht:
+//! `Error::SecondAppointerRequired { target }`. Den Schritt tut ein ZWEITER wirksamer Inhaber mit passender
+//! Geltung (selbst oder als Zustimmender), oder der Türsteher nach der Aufnahme-Regel (die beantragende Person
+//! stimmt nicht mit). Ausnahme: der Installierende (oberster Admin, `Reason::Installer`): er vergibt auch an sich
+//! selbst ohne zweiten Inhaber.
 //!
 //! RANGFOLGE: `NotFound` (verborgen) vor dem bisherigen Rechtefehler (`Forbidden`/`RoleForbidden`) vor
 //! `AppointerRequired` vor `SecondAppointerRequired` vor allen Prüfungen des Inhalts.
@@ -65,7 +81,8 @@
 //! (`AdmissionBasis`: Id der Entscheidung für das Protokoll, H10; der Mensch, dessen Handlung die Grundlage ist,
 //! wird `added_by`). Rechte wie `add_member` des Dienstkontos; bei einer geschützten Gruppe gilt statt
 //! `admin_appointer` die Aufnahme-Regel des Ziels (`SelfManagement::admission`): nur `Confirm` oder `Vote` mit
-//! `by_appointers = true` und ohne Gruppen-Links, sonst `AppointerRequired`.
+//! `by_appointers = true` und ohne Gruppen-Links, sonst `AppointerRequired`. Ist `basis.basis` die aufzunehmende
+//! Person selbst und das Ziel geschützt: `SecondAppointerRequired` (H12; Absicherung neben fs-admission).
 //!
 //! ABSTIMMEN UND BESTÄTIGEN in geschützten Zielen (Strategie 16.11. Frage 1; fs-admission setzt es um, fs-groups
 //! liefert die Inhaber): nur WIRKSAME Inhaber von `admin_appointer` mit passender Geltung (nicht gesperrt, nicht

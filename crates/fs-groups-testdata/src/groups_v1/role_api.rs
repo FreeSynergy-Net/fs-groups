@@ -19,7 +19,7 @@
 //! `withdraw_nesting_request` antworten auf ihre Ids `NotFound(Missing::NestingRequest)` (und umgekehrt).
 //! Offene Anfragen verfallen (`RequestState::Expired`, Regel in `nesting.rs`).
 
-use super::shared::{ObjectId, Page, PersonRef, Place, Reference, Revision};
+use super::shared::{ObjectId, Page, PageCursor, PersonRef, Reference, Revision};
 use super::{
     AssignOutcome, Decision, Deleted, EffectiveRole, EffectiveRoleHolder, HistoryEntry,
     NestOutcome, Nesting, NestingEffect, NestingMode, NestingRequest, NestingSide, Protection,
@@ -37,7 +37,7 @@ pub trait Roles: Send + Sync {
     async fn role_list(
         &self,
         query: &RoleQuery,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Page<RoleSummary>>;
     /// Gelöschte oder verborgene Rolle (KI; unlesbare Geltungs-Gruppe): `None`.
@@ -145,7 +145,7 @@ pub trait Roles: Send + Sync {
     async fn role_holders(
         &self,
         role: ObjectId,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Visible<Page<RoleAssignment>>>;
     /// Wirksame Inhaber (Auflösung `role_holders.rs`, nur `InForce::Yes`), seitenweise; `Visibility` gilt;
@@ -153,7 +153,7 @@ pub trait Roles: Send + Sync {
     async fn effective_role_holders(
         &self,
         role: ObjectId,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Visible<Page<EffectiveRoleHolder>>>;
     /// Direkte Zuordnungen an eine Person (ohne `Membership.role`, die steht in `members`); unlesbare Geltung:
@@ -178,7 +178,7 @@ pub trait Roles: Send + Sync {
     async fn role_history(
         &self,
         role: ObjectId,
-        after: Option<&Place>,
+        after: Option<&PageCursor>,
         size: usize,
     ) -> Result<Page<HistoryEntry>>;
 }
