@@ -1545,6 +1545,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-groups-testdata"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "fs-types",
+ "tokio",
+]
+
+[[package]]
 name = "fs-interfaces"
 version = "0.0.1"
 source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.1#9f2d3a0626d7382b478c754eb31834146188dfab"
@@ -1559,6 +1568,15 @@ dependencies = [
  "tokio",
  "tokio-util",
  "uuid",
+]
+
+[[package]]
+name = "fs-interfaces"
+version = "0.0.22"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.22#7743056396ffa80bc77d3af9d1946229dd1f6155"
+dependencies = [
+ "capnp",
+ "idna",
 ]
 
 [[package]]
@@ -1602,6 +1620,20 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "fs-types"
+version = "0.0.22"
+source = "git+https://github.com/FreeSynergy/fs-interfaces?tag=v0.0.22#7743056396ffa80bc77d3af9d1946229dd1f6155"
+dependencies = [
+ "capnp",
+ "chrono",
+ "fs-interfaces 0.0.22",
+ "geo-uri",
+ "iri-string",
+ "oxilangtag",
+ "unicode-normalization",
 ]
 
 [[package]]
@@ -1735,6 +1767,15 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "geo-uri"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "951577f365723b622bfa73389a8def7393d56c28a3fc9aff3de17fae98fc868c"
+dependencies = [
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2276,6 +2317,16 @@ dependencies = [
  "bitflags 2.13.2",
  "cfg-if",
  "libc",
+]
+
+[[package]]
+name = "iri-string"
+version = "0.7.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1663ee7d8cf2900cc1414b1e1eec9f348d6eaa3bcab07579f4726a4b8499f447"
+dependencies = [
+ "memchr",
+ "serde",
 ]
 
 [[package]]
@@ -3227,6 +3278,15 @@ name = "owo-colors"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
+
+[[package]]
+name = "oxilangtag"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d3b4eb570abd4a1dcb062c31fd37b832264d9dc7292c3e69acfe926c87b063f"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "pack1"

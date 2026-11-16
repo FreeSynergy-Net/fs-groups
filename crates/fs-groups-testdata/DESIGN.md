@@ -1,0 +1,73 @@
+# fs-groups-testdata (design)
+
+Step K0 of the pilot `programm-grundgeruest` for groups. The crate holds everything a frontend or a provider needs
+to work against the locked trait `groups_v1` before the real provider (`LocalGroups`, step K1) exists:
+
+| Part | What it is |
+|---|---|
+| `groups_v1/` | The LOCKED trait folder, byte for byte (SHA-256 `91c0f8b0849d85b1038b8b09f511e27134c1ddfeb0ef2eae42dc8579b3d2faf3`, lock file `.scratch/sperren/groups_v1.sha256`). Never edited; a change is `groups_v2`. `lib.rs` carries the allows the 2024 workspace needs and `#[rustfmt::skip]`, outside the folder. |
+| `FakeGroups` | In memory, implements `Groups`, `Mirroring` and `GroupMembers` completely. |
+| `FakePeople`, `FakeMirror` | The consumed sides: fs-people (`PersonDirectory`, `PersonFacts`, `RoleBook`) and Kanidm (`GroupDirectory`). |
+| `sample()` | The fixed data set: 12 groups in one tree (one in the trash), all three modes, invented people on `example.org`. |
+| `conformance` | `run_conformance(&dyn ConformanceFixture)`: the rules every provider must pass. |
+
+Pins: `fs-types` v0.0.22 (= fs-interfaces `7743056396ffa80bc77d3af9d1946229dd1f6155`) as git tag, `async-trait`. Nothing
+else. The workspace version is the candidate of ADR 0064 (no tag); `fs-release` pins are untouched.
+
+## The fake
+
+`FakeGroups` is a `Mutex<State>`; the trait impl (`fake_impl.rs`) only takes the lock and calls a sync operation on
+the state. The operations are split by theme (`ops_*.rs`); `access.rs` answers who may do and see what; `nest_check.rs`
+is the one check every writer of edges calls (request, answer, mode change, `restore`).
+
+* **Who asks** is a property of the provider (`set_asker`), never a parameter (trait rule). The clock is the
+  provider's too; every write moves it one second; the trash deadline is 30 days (`set_now`).
+* **The AI visibility rule** is `State::visible`: unknown, deleted or hidden is the same `NotFound`, and every method
+  with a group id calls it first. Hidden = the asker is marked as AI and the group is sensitive or carries an admin
+  role. Numbers and filters (`parents`, `children`, `Roots`, `ChildrenOf`), paths (`ancestors`, `Cycle`), grants,
+  history, changes and the origin of effective members leave hidden groups out (`from = None`, `via` empty).
+* **`InForce`** is computed when read, never stored: the account kind fits the group or it does not (`KindMismatch`),
+  an unknown person with an admin role or `Manage` is `AiStatusUnknown`. A mark that changes after the fact needs no
+  write; the membership stays and stops counting.
+* **Mirror**: the plan is a pure computation on the state against the directory as it is (`mirror_plan.rs`), the run
+  (`mirror_run.rs`) writes step by step; the ticket is accepted only when a fresh plan equals the shown one
+  (`PlanStale` otherwise). By-hand things in the directory are findings, never silent steps.
+
+`DECISIONS` (in `fake.rs`) lists what the fake decided where the trait is silent; the conformance rules do not test
+those, only what the trait or the plan says.
+
+## `nesting_logic` (the seam)
+
+`nesting_logic/` is the PURE nesting rule over ids and edges (arcs of the member graph, cycle in the tree and in the
+member graph, depth, the hull with the shortest way, reach for ancestors and descendants). It is the seed of the later
+crate `group-nesting` (written in a parallel run) and is replaced by it: only `state.rs`, `bridge.rs`, `nest_check.rs`,
+`access.rs`, `ops_tree.rs` and `mirror_plan.rs` call it, through its small surface (`Edge`, `Mode`, `arcs`,
+`find_cycle`, `too_deep`, `hull`, `reach`). `bridge.rs` maps the locked `NestingMode` to the logic's `Mode`.
+
+## Conformance
+
+`run_conformance` takes a `ConformanceFixture`: the provider plus what the trait cannot do (make a human, an AI or an
+unknown person, say who asks, move the clock, touch a deleted group, change the directory by hand). A mutator the
+fixture lacks keeps its default; the rules that need it are reported in `Report::skipped`, never as passed. The rules
+seed their own data (`Zzconf ...` groups) and run on an empty or a filled provider. `Report::checked` counts the
+checks that ran (the tests assert a floor, so a rule that quietly cannot set up is noticed).
+
+Rule files: groups (create, read, update, list), trash (`delete`, `restore`, Changed, deadline), nesting (modes,
+rights flow, unequal depth, cycles, depth, sensitivity, mode changes, `nesting_effect`), requests (both sides agree),
+members (roles, visibility, leaving, `LastManager`, paging), invites (all states, expiry), rights (`grant`, `may_do`
+with reasons, change stream, history), AI (kinds, edges, switch, `InForce`, admin roles, `restore`), hidden (every
+method with a hidden group, `NotFound` before any other error, the nine sub-object ids, the narrow view, the mirror,
+the change stream), mirror (plan, ticket, findings, native nesting per mode, AI and admin rules on the hull).
+
+`tests/conformance/` runs the rules against the fake (empty and on the sample) and against four mutants that each
+break one rule (a hidden group leaking through `members`, `nesting_effect` answering `Forbidden`, a cycle called
+`AlreadyThere`, no compare-and-set); the rules must fail for them. `tests/sample.rs` checks the sample's shape.
+
+## Not covered (honest list)
+
+* `FailingGroups` and `SlowGroups` (named in the trait docs) are not built; `FakeMirror` has `set_down`.
+* `FindingKind::Unreadable` and `Looped` of the mirror are never produced (the fake's data cannot be unreadable or
+  looped; a real provider needs rules for them).
+* Zufallsgraphen (random graphs against the pure logic) belong to `group-nesting`, not here.
+* `restore` needs `Manage` and says `Changed` for a deleted group touched since the deletion: the trait says nothing
+  about who may restore; this is a decision of the fake (`DECISIONS`).
