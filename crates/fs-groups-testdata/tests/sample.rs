@@ -1,4 +1,5 @@
-//! The fixed sample: its shape (twelve groups, three modes, every case of the plan) and what the fake says about it.
+//! The fixed sample: its shape (sixteen groups, twenty persons, three modes, every case of the plan) and what the
+//! fake says about it.
 
 use fs_groups_testdata::groups_v1::shared::PersonArt;
 use fs_groups_testdata::groups_v1::{
@@ -17,11 +18,11 @@ fn all() -> GroupQuery {
 }
 
 #[tokio::test]
-async fn the_sample_is_whole_and_has_twelve_groups_one_of_them_deleted() {
+async fn the_sample_is_whole_and_has_sixteen_groups_one_of_them_deleted() {
     let s = sample();
     assert!(s.problems().is_empty(), "{:#?}", s.problems());
     let page = s.groups.list(&all(), None, 100).await.expect("list");
-    assert_eq!(page.items.len(), 12);
+    assert_eq!(page.items.len(), 16);
     assert_eq!(
         page.items
             .iter()
@@ -41,24 +42,29 @@ async fn the_sample_is_whole_and_has_twelve_groups_one_of_them_deleted() {
         )
         .await
         .expect("list");
-    assert_eq!(live.items.len(), 11);
+    assert_eq!(live.items.len(), 15);
 }
 
+const CHAIN: [&str; 9] = [
+    "Chiefs",
+    "Deputies",
+    "Team leads",
+    "Section heads",
+    "Project leads",
+    "Coordinators",
+    "Volunteers",
+    "Trainees",
+    "Newcomers",
+];
+
 #[tokio::test]
-async fn the_sample_uses_all_three_modes_with_chiefs_and_deputies_of_unequal_depth() {
+async fn the_sample_uses_all_three_modes_in_one_tree() {
     let s = sample();
     let mut modes = Vec::new();
-    for name in [
-        "Association",
-        "Events team",
-        "Chiefs",
-        "Deputies",
-        "Team leads",
-        "Stage crew",
-        "Interns",
-        "Assistants",
-        "Outreach team",
-    ] {
+    for name in CHAIN
+        .iter()
+        .chain(&["Association", "Events team", "Assistants", "Outreach team"])
+    {
         let id = s.id(name).expect("group");
         for e in s
             .groups
@@ -76,19 +82,6 @@ async fn the_sample_uses_all_three_modes_with_chiefs_and_deputies_of_unequal_dep
     ] {
         assert!(modes.contains(&m), "{m:?} missing");
     }
-    let leads = s.id("Team leads").expect("group");
-    let alice = s.person("Alice Chair").expect("person");
-    let eff = s
-        .groups
-        .effective_members(leads, None, 50)
-        .await
-        .expect("members")
-        .items;
-    let a = eff
-        .iter()
-        .find(|m| m.person == alice)
-        .expect("Chiefs are also Team leads (TopDown)");
-    assert_eq!(a.inherited[0].via.len(), 3, "Chiefs, Deputies, Team leads");
     let assoc = s.id("Association").expect("group");
     let top = s
         .groups
@@ -96,10 +89,19 @@ async fn the_sample_uses_all_three_modes_with_chiefs_and_deputies_of_unequal_dep
         .await
         .expect("members")
         .items;
+    let olga = s.person("Olga Trainee").expect("person");
+    let counts_up = top
+        .iter()
+        .find(|m| m.person == olga)
+        .expect("Trainees count up to the association");
+    let trainees = s.id("Trainees").expect("group");
+    let events = s.id("Events team").expect("group");
     assert!(
-        top.iter()
-            .any(|m| m.person == s.person("Frank Stage").expect("person")),
-        "Stage crew counts up to the association (two BottomUp edges)"
+        counts_up
+            .inherited
+            .iter()
+            .any(|i| i.via == vec![trainees, events, assoc]),
+        "two BottomUp edges: Trainees, Events team, Association"
     );
 }
 
@@ -131,6 +133,7 @@ async fn the_sample_has_an_ai_group_an_admin_group_a_sensitive_group_and_every_i
         InvitationState::Pending,
         InvitationState::Accepted,
         InvitationState::Declined,
+        InvitationState::Expired,
     ] {
         assert!(states.contains(&st), "{st:?} missing");
     }
@@ -198,11 +201,11 @@ async fn the_narrow_view_resolves_groups_for_other_programs() {
     assert!(members.contains(&s.person("Erin Events").expect("person")));
     let mine = s
         .groups
-        .memberships_of(&s.person("Frank Stage").expect("person"))
+        .memberships_of(&s.person("Olga Trainee").expect("person"))
         .await
         .expect("groups");
     assert!(
         mine.contains(&events),
-        "Frank is in Stage crew, below Events team (BottomUp)"
+        "Olga is in Trainees, below Events team (BottomUp)"
     );
 }

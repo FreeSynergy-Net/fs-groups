@@ -1,4 +1,5 @@
-//! The fixed sample: twelve groups in one tree with all three modes, built through the fake's own operations so it
+//! The fixed sample: sixteen groups and twenty persons in one tree with all three modes, built through the fake's own
+//! operations, so it
 //! stands for what a provider can reach (nothing is put in raw).
 //!
 //! Pattern: Builder (fixed data, applied step by step through the state operations; a step that fails is noted in
@@ -6,32 +7,31 @@
 
 use crate::fake::FakeGroups;
 use crate::fake_mirror::FakeMirror;
-use crate::groups_v1::shared::{ObjectId, PersonRef, Revision, Utc};
+use crate::groups_v1::shared::{ObjectId, PersonRef};
 use crate::groups_v1::{
-    DirectoryAccount, DirectoryGroup, GroupArt, GroupDraft, InvitationAnswer, NestingMode, Result,
-    Right, RoleRef, Visibility,
+    DirectoryAccount, DirectoryGroup, GroupArt, GroupDraft, NestingMode, Result, RoleRef,
+    Visibility,
 };
-use crate::ids::group_ref;
 use crate::people::FakePeople;
-use crate::sample_data::{AGENT, EDGES, HUMANS, MEMBERS, UNKNOWN, groups};
+use crate::sample_data::{AGENTS, EDGES, HUMANS, MEMBERS, UNKNOWN, groups};
 use crate::state::State;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// The names of what was built: ids of groups, persons, roles, and the steps that failed.
 #[derive(Default)]
-struct Book {
-    ids: BTreeMap<&'static str, ObjectId>,
-    persons: BTreeMap<&'static str, PersonRef>,
-    roles: BTreeMap<&'static str, RoleRef>,
-    problems: Vec<String>,
+pub(crate) struct Book {
+    pub(crate) ids: BTreeMap<&'static str, ObjectId>,
+    pub(crate) persons: BTreeMap<&'static str, PersonRef>,
+    pub(crate) roles: BTreeMap<&'static str, RoleRef>,
+    pub(crate) problems: Vec<String>,
 }
 
 impl Book {
-    fn id(&self, name: &str) -> Option<ObjectId> {
+    pub(crate) fn id(&self, name: &str) -> Option<ObjectId> {
         self.ids.get(name).copied()
     }
-    fn person(&self, name: &str) -> Option<PersonRef> {
+    pub(crate) fn person(&self, name: &str) -> Option<PersonRef> {
         self.persons.get(name).cloned()
     }
     fn role(&self, label: &str) -> Option<RoleRef> {
@@ -85,7 +85,7 @@ fn mode_of(c: char) -> NestingMode {
 }
 
 /// Note a failed step.
-fn check<T>(r: Result<T>, what: &str, problems: &mut Vec<String>) -> Option<T> {
+pub(crate) fn check<T>(r: Result<T>, what: &str, problems: &mut Vec<String>) -> Option<T> {
     r.map_err(|e| problems.push(format!("{what}: {e}"))).ok()
 }
 
@@ -93,7 +93,9 @@ fn build_people(people: &FakePeople, out: &mut Book) {
     for name in HUMANS {
         out.persons.insert(name, people.human(name));
     }
-    out.persons.insert(AGENT, people.agent(AGENT));
+    for name in AGENTS {
+        out.persons.insert(name, people.agent(name));
+    }
     out.persons.insert(UNKNOWN, people.unknown(UNKNOWN));
     for (label, admin) in [
         ("Chair", false),
@@ -160,82 +162,6 @@ fn build_members(s: &mut State, out: &mut Book) {
     }
 }
 
-/// Rights, invitations of every state, one open nesting request, one group in the trash.
-fn build_activity(s: &mut State, out: &mut Book) {
-    let ids = |n: &str| out.id(n).unwrap_or_else(|| crate::ids::object_id(0));
-    let fallback = s.asker.clone();
-    let who = |n: &str| out.person(n).unwrap_or_else(|| fallback.clone());
-    let (assoc, events, outreach, chiefs) = (
-        ids("Association"),
-        ids("Events team"),
-        ids("Outreach team"),
-        ids("Chiefs"),
-    );
-    let alice = who("Alice Chair");
-    let mut problems = Vec::new();
-    check(
-        s.grant(events, &who("Carol Lead"), Right::Manage),
-        "grant Carol",
-        &mut problems,
-    );
-    check(
-        s.grant(assoc, &who("Bob Deputy"), Right::AddMembers),
-        "grant Bob",
-        &mut problems,
-    );
-    check(
-        s.grant(assoc, &group_ref(chiefs), Right::RemoveMembers),
-        "grant Chiefs",
-        &mut problems,
-    );
-    check(
-        s.grant(outreach, &group_ref(ids("Assistants")), Right::Read),
-        "grant Assistants",
-        &mut problems,
-    );
-    let later = Some(Utc::from_millis(s.now.millis() + 30 * 24 * 3600 * 1000));
-    check(
-        s.invite(events, &who("Frank Stage"), None, later),
-        "invite Frank",
-        &mut problems,
-    );
-    let gina = check(
-        s.invite(outreach, &who("Gina Guest"), None, None),
-        "invite Gina",
-        &mut problems,
-    );
-    let jonas = check(
-        s.invite(events, &who("Jonas Intern"), None, None),
-        "invite Jonas",
-        &mut problems,
-    );
-    for (inv, name, answer) in [
-        (gina, "Gina Guest", InvitationAnswer::Accept),
-        (jonas, "Jonas Intern", InvitationAnswer::Decline),
-    ] {
-        if let Some(i) = inv {
-            s.asker = who(name);
-            check(
-                s.answer_invitation(i.id, i.revision, answer),
-                name,
-                &mut problems,
-            );
-        }
-    }
-    s.asker = who("Carol Lead");
-    check(
-        s.request_nesting(outreach, events, NestingMode::Single),
-        "request Carol",
-        &mut problems,
-    );
-    s.asker = alice;
-    if let Some(archive) = out.id("Archive") {
-        let rev = s.alive(archive).map_or(Revision(1), |g| g.revision);
-        check(s.delete(archive, rev), "delete Archive", &mut problems);
-    }
-    out.problems.extend(problems);
-}
-
 /// A directory with an old state: the trashed group still in it, a foreign account on Administrators.
 fn build_mirror(out: &Book) -> FakeMirror {
     let mirror = FakeMirror::new();
@@ -273,7 +199,7 @@ pub fn sample() -> Sample {
         build_groups(&mut s, &mut book);
         build_edges(&mut s, &mut book);
         build_members(&mut s, &mut book);
-        build_activity(&mut s, &mut book);
+        crate::sample_activity::build_activity(&mut s, &mut book);
     }
     let mirror = build_mirror(&book);
     Sample {

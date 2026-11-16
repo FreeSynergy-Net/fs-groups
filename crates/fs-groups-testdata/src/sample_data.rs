@@ -2,8 +2,8 @@
 //!
 //! Pattern: none (plain constants).
 
-/// The humans of the sample (the first one asks and created every group).
-pub(crate) const HUMANS: [&str; 10] = [
+/// The humans of the sample (the first one asks and created every group): 17 of the 20 persons.
+pub(crate) const HUMANS: [&str; 17] = [
     "Alice Chair",
     "Bob Deputy",
     "Carol Lead",
@@ -14,9 +14,16 @@ pub(crate) const HUMANS: [&str; 10] = [
     "Hank Union",
     "Ida Admin",
     "Jonas Intern",
+    "Kira Sections",
+    "Liam Projects",
+    "Mara Coordinator",
+    "Noah Volunteer",
+    "Olga Trainee",
+    "Pia Newcomer",
+    "Quinn Archive",
 ];
-/// The AI account of the sample.
-pub(crate) const AGENT: &str = "Assistant Bot";
+/// The two AI accounts of the sample.
+pub(crate) const AGENTS: [&str; 2] = ["Assistant Bot", "Scribe Bot"];
 /// The person nobody knows to be human or AI.
 pub(crate) const UNKNOWN: &str = "Visitor Unknown";
 
@@ -42,20 +49,24 @@ const fn spec(name: &'static str, kind: &'static str, mirror: bool) -> GroupSpec
     }
 }
 
-/// The twelve groups (the last one goes to the trash).
-pub(crate) fn groups() -> [GroupSpec; 12] {
+/// The sixteen groups (the last one goes to the trash). The `TopDown` chain Chiefs to Newcomers has nine levels.
+pub(crate) fn groups() -> [GroupSpec; 16] {
     [
         GroupSpec {
             organization: true,
             ..spec("Association", "Verein", true)
         },
-        spec("Outreach team", "Team", true),
-        spec("Events team", "Team", true),
-        spec("Stage crew", "Crew", true),
-        spec("Chiefs", "Leitung", true),
-        spec("Deputies", "Leitung", true),
-        spec("Team leads", "Leitung", true),
-        spec("Interns", "Gruppe", false),
+        spec("Outreach team", "Team", false),
+        spec("Events team", "Team", false),
+        spec("Chiefs", "Leitung", false),
+        spec("Deputies", "Leitung", false),
+        spec("Team leads", "Leitung", false),
+        spec("Section heads", "Leitung", false),
+        spec("Project leads", "Leitung", false),
+        spec("Coordinators", "Leitung", false),
+        spec("Volunteers", "Gruppe", false),
+        spec("Trainees", "Gruppe", false),
+        spec("Newcomers", "Gruppe", false),
         spec("Administrators", "Admin", true),
         GroupSpec {
             sensitive: true,
@@ -69,33 +80,47 @@ pub(crate) fn groups() -> [GroupSpec; 12] {
     ]
 }
 
-/// The edges: child, parent, mode (`b` bottom-up, `t` top-down, `s` single). Chiefs, Deputies and Team leads are
-/// of unequal depth in the tree (1, 2 and 3 below the association's level) and still flow upwards by right.
-pub(crate) const EDGES: [(&str, &str, char); 8] = [
+/// The edges: child, parent, mode (`b` bottom-up, `t` top-down, `s` single). The chain Chiefs, Deputies, ...,
+/// Newcomers is `TopDown` over nine levels (Chiefs sit as a Single branch under the association). Outreach team has
+/// two parents (the association `BottomUp`, Deputies `TopDown`: a short side branch of the chain), Trainees two (the
+/// chain `TopDown`, the Events team `BottomUp`: a mixed node, its people count up and the chiefs' people flow in).
+pub(crate) const EDGES: [(&str, &str, char); 14] = [
     ("Outreach team", "Association", 'b'),
     ("Events team", "Association", 'b'),
-    ("Stage crew", "Events team", 'b'),
     ("Chiefs", "Association", 's'),
     ("Deputies", "Chiefs", 't'),
     ("Team leads", "Deputies", 't'),
-    ("Interns", "Association", 's'),
+    ("Section heads", "Team leads", 't'),
+    ("Project leads", "Section heads", 't'),
+    ("Coordinators", "Project leads", 't'),
+    ("Volunteers", "Coordinators", 't'),
+    ("Trainees", "Volunteers", 't'),
+    ("Newcomers", "Trainees", 't'),
+    ("Outreach team", "Deputies", 't'),
+    ("Trainees", "Events team", 'b'),
     ("Assistants", "Association", 's'),
 ];
 
 /// Direct members: group, person, role label (`None` = plain member).
-pub(crate) const MEMBERS: [(&str, &str, Option<&str>); 14] = [
+pub(crate) const MEMBERS: [(&str, &str, Option<&str>); 20] = [
     ("Chiefs", "Alice Chair", Some("Chair")),
     ("Deputies", "Bob Deputy", None),
     ("Team leads", "Carol Lead", None),
+    ("Section heads", "Kira Sections", None),
+    ("Project leads", "Liam Projects", None),
+    ("Coordinators", "Mara Coordinator", None),
+    ("Volunteers", "Noah Volunteer", None),
+    ("Trainees", "Olga Trainee", None),
+    ("Newcomers", "Pia Newcomer", None),
+    ("Newcomers", "Visitor Unknown", None),
     ("Association", "Alice Chair", Some("Chair")),
     ("Outreach team", "Dave Outreach", None),
     ("Events team", "Erin Events", None),
-    ("Stage crew", "Frank Stage", None),
     ("Administrators", "Alice Chair", Some("Administrator")),
     ("Administrators", "Ida Admin", None),
     ("Union members", "Hank Union", None),
     ("Union members", "Ida Admin", None),
     ("Assistants", "Assistant Bot", None),
-    ("Interns", "Jonas Intern", None),
-    ("Interns", "Visitor Unknown", None),
+    ("Assistants", "Scribe Bot", None),
+    ("Archive", "Quinn Archive", None),
 ];

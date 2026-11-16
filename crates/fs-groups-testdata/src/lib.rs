@@ -6,7 +6,7 @@
 //! * [`groups_v1`]: the LOCKED trait folder (SHA-256 91c0f8b0...2faf3); never edit it, a change is `groups_v2`.
 //! * [`FakeGroups`]: in memory, every method and rule of `Groups`, `Mirroring` and `GroupMembers`; [`EmptyGroups`] the
 //!   empty one; [`FakePeople`] the consumed fs-people side; [`FakeMirror`] the Kanidm side.
-//! * [`sample`]: the fixed set (12 groups in one tree with all three modes, every case of the plan).
+//! * [`sample`]: the fixed set (16 groups and 20 persons, a `TopDown` chain of nine levels, every case of the plan).
 //! * [`conformance`]: rules any provider must pass (`run_conformance`, later also for `LocalGroups`).
 //! * `nesting_logic` (private): the pure nesting rule, the seed of the later crate `group-nesting`.
 
@@ -24,6 +24,10 @@ pub mod groups_v1;
 mod access;
 mod bridge;
 pub mod conformance;
+mod decorate;
+mod decorate_groups;
+mod decorate_other;
+mod doubles;
 mod fake;
 mod fake_impl;
 mod fake_mirror;
@@ -48,10 +52,13 @@ mod ops_write;
 mod paging;
 mod people;
 mod sample;
+mod sample_activity;
 mod sample_data;
 mod state;
 mod validate;
 
+pub use decorate::{Decorated, Gate, Op, Provider};
+pub use doubles::{Clock, FailGate, FailingGroups, SlowGate, SlowGroups, forbidden, unavailable};
 pub use fake::{DECISIONS, EmptyGroups, FakeGroups, START_MS};
 pub use fake_mirror::FakeMirror;
 pub use ids::{group_ref, id_of_reference, object_id, object_number, person, reference_of};

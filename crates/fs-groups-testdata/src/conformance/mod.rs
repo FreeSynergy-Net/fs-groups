@@ -19,6 +19,8 @@ mod cx;
 mod fixture;
 mod rules_ai;
 mod rules_ai_more;
+mod rules_ai_visible;
+mod rules_deep;
 mod rules_groups;
 mod rules_hidden;
 mod rules_hidden_ids;

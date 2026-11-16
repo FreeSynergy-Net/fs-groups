@@ -2,7 +2,7 @@
 //!
 //! Pattern: Specification (pure functions over an edge list; ids are any ordered copy type).
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// The mode of an edge (the same three as `NestingMode`, kept apart so the module can be swapped).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,7 +36,9 @@ pub(crate) fn arcs<I: Copy>(edges: &[Edge<I>]) -> Vec<(I, I)> {
     edges.iter().filter_map(Edge::arc).collect()
 }
 
-/// A way `from` to `to` over `pairs` (breadth first), when there is one.
+/// A way `from` to `to` over `pairs` (breadth first), when there is one. Of several shortest ways it is the
+/// smallest in id order (the next groups are tried in id order, so the answer does not depend on the order of the
+/// edges): the same data always names the same cycle.
 fn path<I: Copy + Ord>(pairs: &[(I, I)], from: I, to: I) -> Option<Vec<I>> {
     let mut back: BTreeMap<I, I> = BTreeMap::new();
     let mut queue = VecDeque::from([from]);
@@ -51,37 +53,67 @@ fn path<I: Copy + Ord>(pairs: &[(I, I)], from: I, to: I) -> Option<Vec<I>> {
             way.reverse();
             return Some(way);
         }
-        for (a, b) in pairs {
-            if *a == at && *b != from && !back.contains_key(b) {
-                back.insert(*b, at);
-                queue.push_back(*b);
+        let mut next: Vec<I> = pairs
+            .iter()
+            .filter(|(a, _)| *a == at)
+            .map(|(_, b)| *b)
+            .collect();
+        next.sort();
+        for b in next {
+            if b != from && !back.contains_key(&b) {
+                back.insert(b, at);
+                queue.push_back(b);
             }
         }
     }
     None
 }
 
-/// The longest chain (number of pairs) in an acyclic graph.
+/// The longest chain (number of pairs). Safe on a graph with a cycle (old data, put in raw): a way that would close
+/// a cycle is not followed, so the search ends, with the groups tried in id order (the same data, the same answer).
+/// Iterative, so a very long chain cannot overflow the stack either.
 pub(crate) fn longest<I: Copy + Ord>(pairs: &[(I, I)]) -> u32 {
-    fn from<I: Copy + Ord>(at: I, pairs: &[(I, I)], memo: &mut BTreeMap<I, u32>) -> u32 {
-        if let Some(d) = memo.get(&at) {
-            return *d;
-        }
-        let d = pairs
-            .iter()
-            .filter(|(a, _)| *a == at)
-            .map(|(_, b)| 1 + from(*b, pairs, memo))
-            .max()
-            .unwrap_or(0);
-        memo.insert(at, d);
-        d
+    let mut next: BTreeMap<I, Vec<I>> = BTreeMap::new();
+    for (a, b) in pairs {
+        next.entry(*a).or_default().push(*b);
     }
-    let mut memo = BTreeMap::new();
-    pairs
-        .iter()
-        .map(|(a, _)| from(*a, pairs, &mut memo))
-        .max()
-        .unwrap_or(0)
+    for v in next.values_mut() {
+        v.sort();
+        v.dedup();
+    }
+    let mut done: BTreeMap<I, u32> = BTreeMap::new();
+    let mut open: BTreeSet<I> = BTreeSet::new();
+    let mut best = 0;
+    for start in next.keys().copied() {
+        if done.contains_key(&start) {
+            continue;
+        }
+        // A frame: the group, the next child to try, the longest chain found below it so far.
+        let mut stack = vec![(start, 0_usize, 0_u32)];
+        open.insert(start);
+        while let Some(top) = stack.last_mut() {
+            let at = top.0;
+            let child = next.get(&at).and_then(|kids| kids.get(top.1)).copied();
+            top.1 += 1;
+            if let Some(k) = child {
+                if let Some(d) = done.get(&k) {
+                    top.2 = top.2.max(1 + d);
+                } else if open.insert(k) {
+                    stack.push((k, 0, 0));
+                }
+                continue;
+            }
+            let d = top.2;
+            stack.pop();
+            open.remove(&at);
+            done.insert(at, d);
+            best = best.max(d);
+            if let Some(parent) = stack.last_mut() {
+                parent.2 = parent.2.max(1 + d);
+            }
+        }
+    }
+    best
 }
 
 /// The cycle `new` would close among `edges`: in the tree (all modes) or in the member graph (after turning the

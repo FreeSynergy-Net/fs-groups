@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub const START_MS: i64 = 1_794_819_600_000;
 
 /// What the fake decided where the locked trait is silent (for the conformance rules and the DESIGN).
-pub const DECISIONS: [&str; 12] = [
+pub const DECISIONS: [&str; 15] = [
     "Every write takes one second on the fake's own clock (set_now moves it); the trash deadline is 30 days.",
     "Order of checks for a call with a group id: hidden or unknown or deleted (NotFound), then Forbidden, then Changed, then the input (Invalid), then the rule errors.",
     "Rights: Manage covers every right; every right covers Read; AddMembers and RemoveMembers are separate. The installer (if set) may everything and is never counted for LastManager.",
@@ -26,6 +26,9 @@ pub const DECISIONS: [&str; 12] = [
     "Changes: the cursor is the number last seen; since = None gives an empty page whose next is 'now'; every page has a next.",
     "Mirror: the plan lists a step per group that differs; a nesting by hand that fs-groups never wrote is a ForeignNesting finding (overwritable), one it wrote earlier is an unnest step; a Remove step is planned for every directory group fs-groups no longer wants.",
     "Mirror and asking AI: every read and write of Mirroring is Forbidden with the nil id (the AI may not know any group's id).",
+    "A self edge at an AI group is Cycle [A, A] (the cycle check comes before the AI rule); group-nesting says AiNesting there. Known deviation, decided at the switch (DESIGN.md).",
+    "Old edges at an AI group count like Single everywhere (hull, cycle check, depth check); group-nesting counts them in the cycle and depth checks. Known deviation, decided at the switch (DESIGN.md).",
+    "Of several equally short cycles the path named is the smallest in id order; the depth search ends on a cycle (does not follow the way that closes it).",
 ];
 
 /// In-memory `Groups`, `Mirroring` and `GroupMembers`.
