@@ -1474,7 +1474,7 @@ dependencies = [
 
 [[package]]
 name = "fs-groups"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "capnp",
  "fs-groups-app",
@@ -1487,7 +1487,7 @@ dependencies = [
 
 [[package]]
 name = "fs-groups-app"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "capnp",
  "fs-components-app",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "fs-groups-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1518,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "fs-groups-people"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "fs-groups-core",
@@ -1530,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "fs-groups-server"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "capnp",
@@ -1546,7 +1546,7 @@ dependencies = [
 
 [[package]]
 name = "fs-groups-testdata"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "fs-types",
