@@ -68,13 +68,13 @@ pub trait Groups: Send + Sync {
     /// (Inhaberin oder Geltung) und Rollen mit `RoleScope::Group` dieser Gruppe (Kinder bleiben, verlieren diese
     /// Eltern). Spiegel: beim nächsten Abgleich entfernt.
     async fn delete(&self, id: ObjectId, expected: Revision) -> Result<Deleted>;
-    /// Bis `restorable_until`; holt alles zurück, was `delete` mitnahm. Eine Kante, die inzwischen einen Kreis
-    /// schlösse (oder zu tief, oder sensibel unverträglich wäre, oder die KI-Regel verletzte), bleibt weg und
-    /// steht als `NestingRemoved` im Protokoll; Mitgliedschaften, die die KI-Regel inzwischen verletzen (Person
-    /// inzwischen als KI markiert, Gruppe inzwischen `ai`), kommen zurück und zählen nicht
-    /// (`InForce::KindMismatch`), ebenso Rollen-Zuordnungen gegen die KI-Kette (`role_holders.rs`); offene
-    /// Anfragen von `delete` sind `Withdrawn` und kommen nicht zurück; abgelaufene Mitgliedschaften bleiben
-    /// abgelaufen. Bekäme jemand dadurch eine admin-wirksame Rolle zurück: Recht nötig (`appoint.rs`).
+    /// Bis `restorable_until`; holt zurück, was `delete` mitnahm. Eine Kante, die inzwischen Kreis, Tiefe, Sensibel
+    /// oder KI-Regel verletzte, bleibt weg (`NestingRemoved`); Rechte einer KI bei wirksamem "KI erlaubt: nein"
+    /// bleiben weg (`GrantRevoked`, keine Ablehnung, `ai_access.rs`); Mitgliedschaften gegen die KI-Regel (Person
+    /// inzwischen KI, Gruppe inzwischen `ai`) kommen zurück und zählen nicht (`InForce::KindMismatch`), ebenso
+    /// Zuordnungen gegen die KI-Kette (`role_holders.rs`); offene Anfragen von `delete` sind `Withdrawn` und
+    /// kommen nicht zurück; Abgelaufenes bleibt abgelaufen. Bekäme jemand dadurch eine admin-wirksame Rolle
+    /// zurück: Recht nötig (`appoint.rs`); wird die Gruppe dadurch geschützt: ERZWUNGEN "nein".
     async fn restore(&self, id: ObjectId) -> Result<Group>;
 
     // ---- Verschachtelung (group.nest; Regel und Modi: `nesting.rs`)
@@ -259,7 +259,7 @@ pub trait Groups: Send + Sync {
     /// Vergebene Rechte einer Gruppe (`Read` nötig).
     async fn grants(&self, group: ObjectId) -> Result<Vec<Grant>>;
     /// `Manage` nötig. Gleiches Recht an gleichen Inhaber: `AlreadyThere`. `Manage` an KI: `AgentNotAdmin`;
-    /// Admin-Recht oder sensibel jedes Recht an eine KI: `AgentNotAdmin`; "KI erlaubt: nein": `AiNotAllowed`.
+    /// Admin-Recht oder sensibel jedes Recht an eine KI: `AgentNotAdmin`; danach wirksam "nein": `AiNotAllowed`.
     async fn grant(&self, group: ObjectId, holder: &PersonRef, right: Right) -> Result<Grant>;
     /// `Manage` nötig; `LastManager` möglich.
     async fn revoke_grant(&self, grant: ObjectId, expected: Revision) -> Result<()>;

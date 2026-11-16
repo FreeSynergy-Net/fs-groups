@@ -28,7 +28,8 @@ pub enum Right {
 /// sehen deren Mitgliederliste und werden mit eingeladen). Eine KI-Gruppe als Inhaberin gilt nur für ihre
 /// direkten Mitglieder (sie hat nie eine wirksame Kante) und nie für `Manage` (`Error::AgentNotAdmin`); an einer
 /// Gruppe mit Admin-Recht oder einer sensiblen Gruppe hat eine KI gar keinen Zugriff (auch nicht `Read`,
-/// `Error::AgentNotAdmin`). Sonst nur bei "KI erlaubt" (`ai_access.rs`), bei "nein" `Error::AiNotAllowed`.
+/// `Error::AgentNotAdmin`). Sonst nur bei wirksamem "KI erlaubt" (`ai_access.rs`): bei "nein" beim Schreiben
+/// `Error::AiNotAllowed`; ein schon bestehendes Recht einer KI zählt dort nie (`InForce::KindMismatch`, B4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Grant {
     pub id: ObjectId,
@@ -75,7 +76,8 @@ pub enum Reason {
     NoGrant,
     /// Als KI markiert: nie `Manage` (ADR 0056 Punkt 6). Für eine KI zählen überhaupt nur `Holder` und `ViaGroup`
     /// einer KI-Gruppe ("Rechte nur ausdrücklich und einzeln"); ein Recht über eine Menschengruppe (auch eines,
-    /// das ihr nach Neumarkierung noch anhängt, `InForce::KindMismatch`) ergibt `Agent`. An einer Gruppe mit
+    /// das ihr nach Neumarkierung noch anhängt, `InForce::KindMismatch`) ergibt `Agent`; ebenso jedes Recht einer
+    /// KI an einer Gruppe mit wirksamem "KI erlaubt: nein" (`ai_access.rs`, B4). An einer Gruppe mit
     /// Admin-Recht (Admin-Rolle vergeben) und an einer sensiblen Gruppe hat eine KI gar keinen Zugriff, auch nicht
     /// lesend; sie sieht die Gruppe nicht einmal (jede Methode: wie für eine nicht vorhandene Id, `nesting.rs`).
     /// An Rollen: eine KI verwaltet nie; admin-wirksame und sensible Rollen sieht sie nicht (`role_holders.rs`).
@@ -268,8 +270,8 @@ pub enum HistoryKind {
         person: PersonRef,
         expired: bool,
     },
-    /// "KI erlaubt" geändert (`ai_access.rs`); `forced` = im selben Schritt erzwungen (Admin-Recht, sensibel).
-    /// Für eine fragende KI nie ausgeliefert.
+    /// Gespeichertes "KI erlaubt" geändert (`ai_access.rs`); `forced` = im selben Schritt erzwungen (die Gruppe
+    /// wurde sensibel oder geschützt, auch über Kanten und die Hülle). Für eine fragende KI nie ausgeliefert.
     AiAllowedChanged {
         allowed: bool,
         forced: bool,

@@ -128,7 +128,8 @@ pub trait Roles: Send + Sync {
     /// Ablauf wie beim Einhängen (Strategie 16.11., kein Sonderweg): `Manage` an einer Seite nötig, an beiden
     /// `Assigned`, sonst `Requested` an die andere Seite (`NestingRequestKind::Assign`, child = Gruppe, parent =
     /// Rolle; eine KI stimmt nie zu). Geprüft (auch beim Zustimmen): Geltung (`OutOfScope`), Art (`WrongArt`),
-    /// Sensibel-Fluss (Gruppe und Rolle gleich sensibel), KI-Kette, Selbstverwaltung; admin-wirksame Rolle oder
+    /// Sensibel-Fluss (Gruppe und Rolle gleich sensibel), KI-Kette, Selbstverwaltung, KI-Rolle mit Geltung g an
+    /// einer Gruppe mit wirksamem "KI erlaubt: nein" (`AiNotAllowed`, `ai_access.rs`); admin-wirksame Rolle oder
     /// Gruppe wird geschützt: `AppointerRequired` ohne das Recht mit passender Geltung, an sich selbst
     /// `SecondAppointerRequired` (`appoint.rs`); offene Einladungen dadurch geschützter Gruppen: `Revoked`;
     /// schon da: `AlreadyThere`.

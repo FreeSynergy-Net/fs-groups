@@ -22,7 +22,9 @@ pub enum InForce {
     /// markierten Person; eine KI in einer Menschengruppe, ein Mensch oder Unbekannter in einer KI-Gruppe, wenn
     /// das ohne Schreiben entstand (Neumarkierung in BEIDE Richtungen, Altdaten, `restore`; KI-Regel in
     /// `nesting.rs`); ein Befund meldet es. Eine KI hat an Admin- und sensiblen Gruppen gar keinen Zugriff. Ebenso
-    /// Rollen-Zuordnungen und `Membership.role` gegen die KI-Kette (`role_holders.rs`).
+    /// Rollen-Zuordnungen und `Membership.role` gegen die KI-Kette (`role_holders.rs`) und JEDES Recht einer KI
+    /// (`Grant`, KI-Rolle mit Geltung g) an einer Gruppe mit wirksamem "KI erlaubt: nein", egal woher (B4,
+    /// `ai_access.rs`).
     KindMismatch,
     /// Admin-Rolle (auch admin-wirksam über die Kette) oder `Manage` bei einer Person, von der niemand weiß, ob sie
     /// ein Mensch ist.

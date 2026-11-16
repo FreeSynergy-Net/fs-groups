@@ -56,9 +56,10 @@ pub struct Group {
     /// KI-Konten sind nie direkt in Menschengruppen (`Error::AiNesting`, `nesting.rs`). Rechte bekommt sie nur
     /// ausdrücklich und einzeln, `Manage` nie.
     pub ai: bool,
-    /// "KI erlaubt" (`ai_access.rs`): KI-Teilnahme in Räumen der Gruppe und Rechte von KI-Gruppen an ihr; NIE
-    /// Mitgliedschaft. Fest `false` bei `sensitive` und Admin-Recht; eine fragende KI liest immer `false`.
-    pub ai_allowed: bool,
+    /// "KI erlaubt" (`ai_access.rs`): KI-Teilnahme in Räumen der Gruppe und Rechte einer KI an ihr; NIE
+    /// Mitgliedschaft. Der WIRKSAME Wert (abgeleitet: `false` bei `sensitive` und geschützter Gruppe, auch über die
+    /// Hülle); `None` für eine fragende KI (sie sieht das Feld nie, ADR 0054 Nachtrag 2, Präzisierung 1).
+    pub ai_allowed: Option<bool>,
     /// Soll diese Gruppe in Verzeichnisse (Kanidm) gespiegelt werden (ADR 0056 Punkt 8: nur wer Rechte braucht)?
     /// Bei `sensitive` und bei `ai` immer `false` (`Error::Invalid`, `SensitiveNotMirrored`, `AiNotMirrored`).
     pub mirror: bool,
@@ -83,7 +84,7 @@ pub struct GroupSummary {
     pub direct_members: Option<u32>,
     pub sensitive: bool,
     pub ai: bool,
-    /// "KI erlaubt" (`ai_access.rs`); `None` für eine fragende KI (sie sieht das Feld nie).
+    /// "KI erlaubt", wirksamer Wert wie `Group::ai_allowed` (`ai_access.rs`); `None` für eine fragende KI.
     pub ai_allowed: Option<bool>,
     pub mirror: bool,
     /// `None` = nicht gelöscht; sonst Ende der Papierkorbfrist.
@@ -144,8 +145,8 @@ pub struct GroupPatch {
     /// `false` bei einer KI-Gruppe mit KI-Mitgliedern (sonst Umweg an der Kantenprüfung vorbei). Setzen darf es
     /// nur, wer `Manage` hat, nie eine KI.
     pub ai: Option<bool>,
-    /// "KI erlaubt": nur ein Mensch mit `Manage`; `true` an sensibler oder admin-wirksamer Gruppe:
-    /// `AiNotAllowed`; "nein" widerruft sofort (`ai_access.rs`).
+    /// "KI erlaubt": nur ein Mensch mit `Manage`; `true` an sensibler oder geschützter Gruppe: `AiNotAllowed`;
+    /// zugleich mit `sensitive = Some(true)`: `Invalid` (`Field::AiAllowed`); "nein" widerruft sofort (`ai_access.rs`).
     pub ai_allowed: Option<bool>,
     pub mirror: Option<bool>,
 }

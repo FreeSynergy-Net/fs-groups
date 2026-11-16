@@ -48,7 +48,8 @@ pub enum Field {
     Concept,
     /// Letzter Tag einer Befristung oder Sperre (`until`).
     Until,
-    /// "KI erlaubt" (`ai_access.rs`): `true` an einer KI-Gruppe oder beim Anlegen einer sensiblen Gruppe.
+    /// "KI erlaubt" (`ai_access.rs`): `true` an einer KI-Gruppe, beim Anlegen einer sensiblen Gruppe oder im
+    /// selben Patch mit `sensitive = Some(true)` (H19).
     AiAllowed,
 }
 
@@ -212,9 +213,11 @@ pub enum Error {
     SecondAppointerRequired {
         target: ObjectId,
     },
-    /// Die Gruppe hat "KI erlaubt: nein" (`ai_access.rs`): Recht an eine KI-Gruppe oder ein KI-Konto,
-    /// `restore` mit solchen Rechten, KI-Teilnahme in einem Raum der Gruppe; ebenso `true` an einer sensiblen oder
-    /// admin-wirksamen Gruppe (`update`). Nie an eine fragende KI. Nichts geschrieben.
+    /// Die Gruppe hat wirksam "KI erlaubt: nein" (`ai_access.rs`): ein Mensch gibt einer KI-Gruppe oder einem
+    /// KI-Konto ein Recht (`grant`), ordnet eine KI-Rolle mit Geltung g zu oder lädt eine KI in einen Raum der
+    /// Gruppe; ebenso `true` an einer sensiblen oder geschützten Gruppe (`update`). NIE an eine fragende KI (Räume:
+    /// `NotFound`, H15); nie bei `restore` (Rechte bleiben weg, `GrantRevoked`, H16). Rangfolge: nach
+    /// `AgentNotAdmin` zum Ziel (H17). Nichts geschrieben.
     AiNotAllowed {
         group: ObjectId,
     },
