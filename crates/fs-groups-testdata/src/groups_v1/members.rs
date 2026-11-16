@@ -1,28 +1,34 @@
-//! Mitgliedschaften, Rollen, Einladungen (Tabellen `groups_membership`, `groups_invitation`, PLAN.md §3).
+//! Mitgliedschaften (mit Rolle), Einladungen (Tabellen `groups_membership`, `groups_invitation`, PLAN.md §3).
 //!
 //! Pattern: Value Object (Mitgliedschaft, Einladung) + State (Lebenslauf einer Einladung, eine Übergangsfunktion
 //! beim Anbieter).
 
-use super::shared::{ObjectId, PersonRef, Reference, Revision, Utc};
+use super::shared::{Date, ObjectId, PersonRef, Reference, Revision, Utc};
 use super::Inherited;
 
-/// Verweis auf eine Rollendefinition (SKOS / W3C `org:Role`, ADR 0052). Die Definition und ihr Anzeigename
-/// liegen in fs-people (`RoleBook`); fs-groups prüft nur, dass es ein `Reference` ist und ob sie Admin-Rolle ist.
+/// Verweis auf eine Rolle dieses Anbieters (`urn:uuid:<id>` einer `Role`, W3C `org:Role`, ADR 0052; Entscheidung
+/// 21: die Definition liegt in fs-groups, `role.rs`, fs-people zeigt nur an). Unbekannt:
+/// `NotFound(Missing::RoleReference)`; außerhalb ihrer Geltung: `Invalid` (`Field::Role`, `OutOfScope`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RoleRef(pub Reference);
 
 /// Warum ein Eintrag gerade nichts zählt (er bleibt stehen, ADR 0056 Punkt 6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum InForce {
     Yes,
     /// Kontoart passt nicht zur Gruppe oder zum Recht; die Mitgliedschaft bleibt stehen, zählt aber nicht (fehlt
     /// in `effective_members`, `may_do`, `GroupMembers`). Fälle: Admin-Rolle oder `Manage` bei einer als KI
     /// markierten Person; eine KI in einer Menschengruppe, ein Mensch oder Unbekannter in einer KI-Gruppe, wenn
     /// das ohne Schreiben entstand (Neumarkierung in BEIDE Richtungen, Altdaten, `restore`; KI-Regel in
-    /// `nesting.rs`); ein Befund meldet es. Eine KI hat an Admin- und sensiblen Gruppen gar keinen Zugriff.
+    /// `nesting.rs`); ein Befund meldet es. Eine KI hat an Admin- und sensiblen Gruppen gar keinen Zugriff. Ebenso
+    /// Rollen-Zuordnungen und `Membership.role` gegen die KI-Kette (`role_holders.rs`).
     KindMismatch,
-    /// Admin-Rolle oder `Manage` bei einer Person, von der niemand weiß, ob sie ein Mensch ist.
+    /// Admin-Rolle (auch admin-wirksam über die Kette) oder `Manage` bei einer Person, von der niemand weiß, ob sie
+    /// ein Mensch ist.
     AiStatusUnknown,
+    /// Die Person ist an der Gruppe bzw. Rolle gesperrt (`Block`, `limits.rs`): Eintrag sichtbar, ohne Wirkung.
+    Blocked,
 }
 
 /// Direkte Mitgliedschaft (AS2 `Relationship` in `org:Membership`-Form). `person.art` ist `Person` oder
@@ -33,9 +39,14 @@ pub struct Membership {
     pub revision: Revision,
     pub group: ObjectId,
     pub person: PersonRef,
-    /// `None` = einfaches Mitglied ohne besondere Rolle.
+    /// `None` = einfaches Mitglied ohne besondere Rolle. Sonst eine Rolle mit Geltung `Instance` oder `Group`
+    /// dieser Gruppe; wirkt wie eine Zuordnung an die Person mit `within` = diese Gruppe (Claim `<key>:<gruppen-uuid>`,
+    /// `role_holders.rs`); KI-Kette und Selbstverwaltung gelten.
     pub role: Option<RoleRef>,
     pub since: Utc,
+    /// Letzter Tag der Mitgliedschaft (einschließlich, Zone des Anbieters); `None` = unbefristet. Danach entfällt
+    /// sie samt Rolle (`limits.rs`).
+    pub until: Option<Date>,
     pub added_by: PersonRef,
     /// Gesetzt, wenn die Mitgliedschaft durch Annahme einer Einladung entstand.
     pub from_invitation: Option<ObjectId>,

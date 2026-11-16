@@ -1,12 +1,13 @@
-//! VERBRAUCHT, nicht unser Thema: was fs-groups von fs-people braucht (ADR 0052, 0056, 0085). Eigentümer:
-//! fs-people. Stand-in der Form, die fs-groups braucht; die Brücke `fs-groups-people` (Adapter) setzt sie auf
-//! die echten Schnittstellen von fs-people um. Weicht fs-people ab, ändert sich nur die Brücke, nicht dieser
-//! Ordner, solange die Form hier erfüllbar bleibt.
+//! VERBRAUCHT, nicht unser Thema: was fs-groups von fs-people (ADR 0052, 0056, 0085) und fs-admission braucht.
+//! Eigentümer: fs-people bzw. fs-admission. Stand-in der Form, die fs-groups braucht; die Brücken (Adapter, z. B.
+//! `fs-groups-people`) setzen sie auf die echten Schnittstellen um. Weicht ein Eigentümer ab, ändert sich nur die
+//! Brücke, nicht dieser Ordner, solange die Form hier erfüllbar bleibt.
 //!
-//! Pattern: Adapter (Personenverzeichnis, Rollenbuch und KI-Markierung an der Grenze, hinter Traits).
+//! Pattern: Adapter (Personenverzeichnis, KI-Markierung und Selbstverwaltung an der Grenze, hinter Traits). Das
+//! Rollenbuch (`RoleBook`) war hier verbraucht; seit Entscheidung 21 bietet fs-groups es an (`provided.rs`).
 
-use super::shared::PersonRef;
-use super::{Result, RoleRef};
+use super::shared::{ObjectId, PersonRef};
+use super::Result;
 use async_trait::async_trait;
 
 /// Personen-Verweis auflösen. GLEICHE Form wie `appointments_v1::PersonDirectory` (gesperrt), damit fs-people
@@ -31,21 +32,36 @@ pub trait PersonFacts: Send + Sync {
     async fn is_agent(&self, person: &PersonRef) -> Result<Option<bool>>;
 }
 
-/// Eine Rolle aus dem Rollenbuch (SKOS / `org:Role`, ADR 0052).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RoleInfo {
-    pub role: RoleRef,
-    /// Anzeigename in der Sprache der Person (fs-people liefert die Übersetzung, ADR 0057).
-    pub label: String,
-    /// Admin-Rolle: nie für KI oder unbekannte Personen (ADR 0056).
-    pub admin: bool,
+/// Art der Aufnahme-Regel (Stand-in; Eigentümer `admission_v1`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AdmissionRule {
+    /// Gültige Einladung genügt.
+    Open,
+    /// Ein Mensch bestätigt.
+    Confirm,
+    /// Abstimmung.
+    Vote,
 }
 
-/// Rollen, die in Gruppen vergeben werden können (Definition in fs-people, ADR 0052).
+/// Selbstverwaltung eines Ziels, so weit fs-groups sie prüft (`appoint.rs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Admission {
+    pub rule: AdmissionRule,
+    /// Bestätigen bzw. abstimmen dürfen nur wirksame Inhaber von `admin_appointer` mit passender Geltung, ohne
+    /// die beantragende Person; die Basis wird beim Start festgehalten (`appoint.rs`).
+    pub by_appointers: bool,
+    /// Gruppen-Links (QR, Link) erlaubt.
+    pub links: bool,
+}
+
+/// Selbstverwaltung einer Gruppe oder Rolle. VERBRAUCHT von fs-admission (`admission_v1`, Eigentümer des
+/// Kennzeichens und der Aufnahme-Regel; Entscheidung 21: Aufnahme ist ein eigener Baustein). fs-groups fragt es
+/// vor jedem Schreiben, das ein Ziel geschützt oder KI machen würde (`ConflictKind::SelfManaged`), und wenn der
+/// Türsteher in eine geschützte Gruppe aufnimmt (`appoint.rs`); fs-admission fragt umgekehrt `Roles::protection`,
+/// bevor es einschaltet. Nicht erreichbar: `Unavailable(Unreachable::Admission)`, nichts geschrieben.
 #[async_trait]
-pub trait RoleBook: Send + Sync {
-    /// Alle Rollen für die Auswahl, in der Reihenfolge des Rollenbuchs.
-    async fn roles(&self) -> Result<Vec<RoleInfo>>;
-    /// Eine Rolle; `None`, wenn das Rollenbuch sie nicht (mehr) kennt (Anzeige: der Verweis selbst).
-    async fn role(&self, role: &RoleRef) -> Result<Option<RoleInfo>>;
+pub trait SelfManagement: Send + Sync {
+    /// `None` = nicht selbstverwaltet.
+    async fn admission(&self, target: ObjectId) -> Result<Option<Admission>>;
 }

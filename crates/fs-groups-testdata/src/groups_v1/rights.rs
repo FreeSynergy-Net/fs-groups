@@ -3,10 +3,11 @@
 //! Pattern: Value Object (Recht, Entscheidung, Änderung) + Specification (die Regel liegt beim Anbieter, die
 //! Antwort nennt ihren Grund).
 
-use super::shared::{ObjectId, PersonRef, Revision, Utc};
-use super::{InForce, InvitationState, NestingMode, RequestState, RoleRef};
+use super::shared::{Date, ObjectId, PersonRef, Revision, Utc};
+use super::{BlockTarget, InForce, InvitationState, NestingMode, RequestState, RoleField, RoleRef};
 
-/// Ein Recht an einer Gruppe. `Manage` schließt die anderen ein.
+/// Ein Recht an einer Gruppe. `Manage` schließt die anderen ein. An einer Rolle gelten nur `Read` und `Manage`
+/// (`role_api.rs`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Right {
     /// Mitgliederliste, Einladungen, Rechte und Spiegel-Zustand lesen (über `Visibility` hinaus).
@@ -40,8 +41,9 @@ pub struct Grant {
     pub in_force: InForce,
 }
 
-/// Warum `may_do` so antwortet. Im Zweifel nein.
+/// Warum `may_do` bzw. `may_do_role` so antwortet. Im Zweifel nein.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Reason {
     /// Recht direkt an der Person (`grant`), ggf. über `Manage`.
     Holder {
@@ -57,7 +59,18 @@ pub enum Reason {
         /// `Inherited::from`: eine KI bei Admin-/sensiblen Gruppen, ein Mensch ohne Leserecht an einer sensiblen).
         holder: Option<ObjectId>,
     },
-    /// Wer installiert hat, ist oberster Admin (ADR 0056 Punkt 1), nicht auf einer Schleife.
+    /// Rolle: wirksames Mitglied der Verwaltergruppe `Role::managers`; `None`, wenn die fragende Person die
+    /// Gruppe nicht lesen darf (Regel "verborgen").
+    Manages {
+        group: Option<ObjectId>,
+    },
+    /// Gesperrt (`limits.rs`): Sperre schlägt Erlaubnis, auch jeden Grant, jede Rolle und `Manage`; nie ja.
+    /// Geprüft nach der Verbergung und nach `Installer` (nie gesperrt, B2), vor allen anderen Erlaubnissen.
+    Blocked {
+        block: ObjectId,
+    },
+    /// Wer installiert hat, ist oberster Admin (ADR 0056 Punkt 1), nicht auf einer Schleife; nie gesperrt (geht
+    /// `Blocked` vor, `limits.rs`).
     Installer,
     NoGrant,
     /// Als KI markiert: nie `Manage` (ADR 0056 Punkt 6). Für eine KI zählen überhaupt nur `Holder` und `ViaGroup`
@@ -65,6 +78,7 @@ pub enum Reason {
     /// das ihr nach Neumarkierung noch anhängt, `InForce::KindMismatch`) ergibt `Agent`. An einer Gruppe mit
     /// Admin-Recht (Admin-Rolle vergeben) und an einer sensiblen Gruppe hat eine KI gar keinen Zugriff, auch nicht
     /// lesend; sie sieht die Gruppe nicht einmal (jede Methode: wie für eine nicht vorhandene Id, `nesting.rs`).
+    /// An Rollen: eine KI verwaltet nie; admin-wirksame und sensible Rollen sieht sie nicht (`role_holders.rs`).
     Agent,
     /// Nicht bekannt, ob ein Mensch: nie `Manage`.
     AiStatusUnknown,
@@ -83,7 +97,9 @@ pub struct Decision {
 }
 
 /// Was sich geändert hat (für Beobachter: Fenster neu laden, Kalender/Tasks Mitglieder neu holen).
+/// `Deleted`/`Restored` gelten für Gruppen und Rollen.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ChangeKind {
     Group(ObjectId),
     Membership {
@@ -110,6 +126,25 @@ pub enum ChangeKind {
     Mirror {
         group: ObjectId,
     },
+    Role(ObjectId),
+    /// Zuordnung angelegt oder gelöst (wirksame Rollen der Inhaber neu holen).
+    RoleAssignment {
+        role: ObjectId,
+    },
+    /// Rollen-Kante angelegt, Modus geändert oder gelöst.
+    RoleNesting {
+        child: ObjectId,
+        parent: ObjectId,
+    },
+    /// Anfrage im Rollenbaum oder Zuordnungs-Anfrage (dann `child` = Gruppe, `parent` = Rolle).
+    RoleNestingRequest {
+        child: ObjectId,
+        parent: ObjectId,
+    },
+    /// Sperre gesetzt, aufgehoben oder abgelaufen (wirksame Mitglieder und Rollen neu holen).
+    Block {
+        target: BlockTarget,
+    },
 }
 
 /// Ein Eintrag im Änderungsstrom.
@@ -133,8 +168,10 @@ pub enum GroupField {
     Mirror,
 }
 
-/// Typisiertes Protokoll einer Gruppe (ADR 0086 Punkt 2; Werte stehen in `activity_change`).
+/// Typisiertes Protokoll einer Gruppe oder Rolle (ADR 0086 Punkt 2; Werte stehen in `activity_change`). Im
+/// Protokoll einer Rolle nennen `Nesting*` mit `other` die Rolle am anderen Ende.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HistoryKind {
     Created,
     Updated {
@@ -164,9 +201,11 @@ pub enum HistoryKind {
     NestingRemoved {
         other: ObjectId,
     },
+    /// `decision` = Id der Entscheidung des Türstehers (`Groups::admit_member`, `appoint.rs`), sonst `None`.
     MemberAdded {
         person: PersonRef,
         role: Option<RoleRef>,
+        decision: Option<ObjectId>,
     },
     RoleChanged {
         person: PersonRef,
@@ -190,6 +229,44 @@ pub enum HistoryKind {
     GrantRevoked {
         holder: PersonRef,
         right: Right,
+    },
+    RoleUpdated {
+        fields: Vec<RoleField>,
+    },
+    /// Steht im Protokoll der Rolle, der Inhaber-Gruppe und der Geltungs-Gruppe.
+    RoleAssigned {
+        role: ObjectId,
+        holder: PersonRef,
+        within: Option<ObjectId>,
+    },
+    /// Zuordnungs-Anfrage gestellt (Antwort: `NestingAnswered` mit `other` = Gegenseite).
+    RoleAssignRequested {
+        role: ObjectId,
+        group: ObjectId,
+    },
+    RoleUnassigned {
+        role: ObjectId,
+        holder: PersonRef,
+        within: Option<ObjectId>,
+    },
+    /// Befristete Mitgliedschaft abgelaufen und entfallen (mit ihrer Rolle; `limits.rs`).
+    MembershipExpired {
+        person: PersonRef,
+        role: Option<RoleRef>,
+    },
+    MembershipUntilChanged {
+        person: PersonRef,
+        from: Option<Date>,
+        to: Option<Date>,
+    },
+    /// Im Protokoll des Ziels (Gruppe bzw. Rolle); nur für Inhaber von `Manage` sichtbar.
+    Blocked {
+        person: PersonRef,
+    },
+    /// Aufgehoben (`expired: false`) oder nach `Block::until` abgelaufen (`true`, `limits.rs`).
+    Unblocked {
+        person: PersonRef,
+        expired: bool,
     },
 }
 

@@ -1,7 +1,11 @@
 //! Spiegel in Verzeichnisse (Kanidm): fs-groups legt fest, das Verzeichnis gleicht an (ADR 0047, 0055, 0082
 //! Entscheidung 6). `GroupDirectory` ist VERBRAUCHT (Anbieter: fs-identity, Kanidm-REST); `Mirroring` bietet
-//! fs-groups an (Aufrufer: `fs-server`, CLI, Fenster nur lesend). Rollen, Rechte und Einladungen werden nicht
-//! gespiegelt (PLAN §4). Nur Gruppen mit `mirror = true`, nie `sensitive`, nie KI-Gruppen.
+//! fs-groups an (Aufrufer: `fs-server`, CLI, Fenster nur lesend). Rechte und Einladungen werden nicht gespiegelt
+//! (PLAN §4); Rollen als `role_*` im SELBEN Plan (`MirrorStep::Role`, eine Freigabe, ein Ticket; Werte und Regeln
+//! `role_mirror.rs`). Nur Gruppen mit `mirror = true`, nie `sensitive`, nie KI-Gruppen.
+//!
+//! Pattern: Strategy + Adapter (Verzeichnis austauschbar) + Template Method beim Anbieter (Plan, Prüfung,
+//! Schreiben in Reihenfolge) + Memento (Plan-Ticket bindet das Anwenden an den gezeigten Plan).
 //!
 //! Spiegel je Modus (PLAN O1, Nutzerentscheidung 2026-11-16; Entwurf ADR-0082-Nachtrag): NATIV, nichts flach
 //! ausgerechnet. Der Mitgliedsgraph (`nesting.rs`) geht eins zu eins nach Kanidm:
@@ -27,12 +31,9 @@
 //! Sie bleiben in fs-groups und in der Anzeige; ihre Mitglieder stehen in Kanidm nirgends. Kein stilles
 //! Weglassen: der Plan nennt jeden Ausschluss als `FindingKind::AiGroupExcluded(Gruppe)`; `mirror = true` bei
 //! `ai` ist beim Schreiben `Error::Invalid` (`ProblemKind::AiNotMirrored`).
-//!
-//! Pattern: Strategy + Adapter (Verzeichnis austauschbar) + Template Method beim Anbieter (Plan, Prüfung,
-//! Schreiben in Reihenfolge) + Memento (Plan-Ticket bindet das Anwenden an den gezeigten Plan).
 
 use super::shared::{ObjectId, PersonRef, Reference, Utc};
-use super::{Error, Result};
+use super::{BlockTarget, Error, Result, RoleDirectoryEntry, RoleStep, RoleTarget};
 use async_trait::async_trait;
 
 /// Kennung eines Verzeichnisses (z. B. die Kanidm-Adresse); trennt die Buchführung je Verzeichnis.
@@ -74,7 +75,8 @@ pub struct Applied {
     pub unmapped: Vec<PersonRef>,
 }
 
-/// VERBRAUCHT: das Verzeichnis (Anbieter fs-identity). Idempotent; ändert nur Gruppen, die fs-groups angelegt hat.
+/// VERBRAUCHT: das Verzeichnis (Anbieter fs-identity). Idempotent; ändert nur Gruppen und Rollen-Gruppen, die
+/// fs-groups angelegt hat (Ledger). `apply_role` setzt auch Name, `displayname` und `description`.
 #[async_trait]
 pub trait GroupDirectory: Send + Sync {
     fn directory_id(&self) -> DirectoryId;
@@ -85,10 +87,21 @@ pub trait GroupDirectory: Send + Sync {
     ) -> std::result::Result<Option<DirectoryGroup>, DirectoryError>;
     async fn apply(&self, group: &DirectoryGroup) -> std::result::Result<Applied, DirectoryError>;
     async fn remove(&self, group: ObjectId) -> std::result::Result<(), DirectoryError>;
+    async fn list_roles(&self) -> std::result::Result<Vec<RoleDirectoryEntry>, DirectoryError>;
+    async fn read_role(
+        &self,
+        target: RoleTarget,
+    ) -> std::result::Result<Option<RoleDirectoryEntry>, DirectoryError>;
+    async fn apply_role(
+        &self,
+        entry: &RoleDirectoryEntry,
+    ) -> std::result::Result<Applied, DirectoryError>;
+    async fn remove_role(&self, target: RoleTarget) -> std::result::Result<(), DirectoryError>;
 }
 
 /// Ein geplanter Schritt.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MirrorStep {
     Create {
         group: ObjectId,
@@ -103,14 +116,18 @@ pub enum MirrorStep {
     Remove {
         group: ObjectId,
     },
+    /// Schritt an einer Rollen-Gruppe `role_*` (nach allen Gruppen-Schritten im selben Plan).
+    Role(RoleStep),
 }
 
 /// Nummer eines Befunds im Plan (für die Bestätigung je Fall).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FindingId(pub u32);
 
-/// Was der Abgleich meldet statt still zu handeln.
+/// Was der Abgleich meldet statt still zu handeln. Zu Rollen-Schritten nennen `LeftOut`, `HeldBack`,
+/// `Unreadable`, `Looped` und `ForeignNesting` Rollen-Ids (Rollen-Gruppen) statt Gruppen-Ids.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FindingKind {
     /// Im Verzeichnis von Hand hinzugefügt: ein Konto oder eine fremde Kanidm-Gruppe (SPN, wörtlich aus dem
     /// Verzeichnis). Entfernen nur nach Bestätigung je Fall (Gate `human`).
@@ -142,9 +159,24 @@ pub enum FindingKind {
     /// still `unnest` planen (O10): erst nach Bestätigung je Fall entfernt (`overwritable`). Eine fremde
     /// Kanidm-Gruppe darin ist `Foreign` (SPN).
     ForeignNesting { outer: ObjectId, inner: ObjectId },
+    /// Rolle von der Spiegelung ausgeschlossen (`mirror = false`, `sensitive` oder `ai`); steht sie aus Altdaten im
+    /// Verzeichnis, plant der Abgleich `RoleStep::Remove`.
+    RoleExcluded(ObjectId),
+    /// Inhaber-Gruppe `group` der Rolle `role` wird nicht gespiegelt: ihr Bogen in die Rollen-Gruppe fehlt, die
+    /// wirksamen Inhaber in Kanidm sind weniger als `effective_role_holders`. Nie still.
+    HolderNotMirrored { role: ObjectId, group: ObjectId },
+    /// Kein freier Name `role_…` mit höchstens 64 Zeichen (Kollision, `role_mirror.rs`): die Rolle bleibt draußen.
+    RoleNameTaken(ObjectId),
+    /// Befristete Mitgliedschaft abgelaufen: Grund für ein geplantes `remove` (`limits.rs`).
+    MembershipExpired(PersonRef),
+    /// Sperre, die Kanidm nicht abbilden kann (Person kommt nur über einen Bogen hinein; `limits.rs`).
+    BlockNotMirrored {
+        person: PersonRef,
+        target: BlockTarget,
+    },
 }
 
-/// Ein Befund; `overwritable` = darf nach Bestätigung überschrieben werden.
+/// Ein Befund; `overwritable` = darf nach Bestätigung überschrieben werden. `group` = Gruppe oder Rolle.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MirrorFinding {
     pub id: FindingId,
@@ -196,10 +228,10 @@ pub struct MirrorStatus {
     pub groups_mirrored: u32,
 }
 
-/// Spiegel-Zustand einer Gruppe.
+/// Spiegel-Zustand einer Gruppe (auch einer Rollen-Gruppe, `Mirroring::role_mirror_state`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GroupMirrorState {
-    /// `mirror = false`, `sensitive` oder KI-Gruppe (`ai`).
+    /// `mirror = false`, `sensitive` oder KI-Gruppe bzw. KI-Rolle (`ai`).
     NotMirrored,
     /// Noch nie abgeglichen.
     Pending,
@@ -224,7 +256,7 @@ pub enum MirrorError {
 }
 
 /// Spiegeln anbieten. Eine KI darf `Mirroring` gar nicht lesen (`nesting.rs`).
-/// Wer handelt, braucht `Manage` an jeder Gruppe, die der Plan ändert (sonst bleibt sie als
+/// Wer handelt, braucht `Manage` an jeder Gruppe und Rolle, die der Plan ändert (sonst bleibt sie als
 /// `HeldBack` stehen); nie eine KI (ADR 0056, 0082: der Mensch führt aus).
 #[async_trait]
 pub trait Mirroring: Send + Sync {
@@ -248,4 +280,9 @@ pub trait Mirroring: Send + Sync {
         &self,
         group: ObjectId,
     ) -> Result<Vec<(DirectoryId, GroupMirrorState)>>;
+    /// Stand einer Rolle je Verzeichnis und Geltung (`NotMirrored` bei `mirror = false`, sensibel, KI).
+    async fn role_mirror_state(
+        &self,
+        role: ObjectId,
+    ) -> Result<Vec<(DirectoryId, RoleTarget, GroupMirrorState)>>;
 }

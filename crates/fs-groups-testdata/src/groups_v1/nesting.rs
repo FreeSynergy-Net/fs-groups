@@ -46,28 +46,36 @@
 //!   `answer_`/`withdraw_nesting_request`, `change_nesting_mode`, `remove_nesting`, `answer_`/`revoke_invitation`,
 //!   `revoke_grant`). Nie `Forbidden`: das verriete, dass es sie gibt; `may_do` gilt auch, wenn die KI nach einer
 //!   fremden Person fragt. Zahlen und Filter zählen nur sichtbare Gruppen (`GroupSummary::parents`/`children`,
-//!   `ParentFilter::Roots` = Gruppen ohne SICHTBAREN Elternteil, `NestingEffect`). `nesting_effect` braucht
-//!   `Manage` an einer Seite. Ist eine der beiden Ids eine solche Gruppe, antwortet es einer KI wie oben
-//!   `NotFound` (vor dem Rechtefehler); sonst ist es für eine KI `Forbidden`. Einträge, die
+//!   `ParentFilter::Roots` = Gruppen ohne SICHTBAREN Elternteil). `nesting_effect`: ist eine der beiden Ids eine
+//!   solche Gruppe, antwortet es einer KI wie oben `NotFound` (vor dem Rechtefehler), sonst `Forbidden`; denn es
+//!   braucht `Manage`, und eine KI hat nie `Manage`. Die Zahlen von `NestingEffect` erreicht eine KI also nie;
+//!   das ist eine Folge, keine eigene Regel (K0b M9). Für Menschen gilt dort `Visibility`. Einträge, die
 //!   eine solche Gruppe nennen, fehlen in Ergebnissen und Fehlerpfaden: Kanten, Anfragen, Einladungen, `Grant`,
 //!   `HistoryKind::other`, `ChangeKind`, Befunde und Schritte des Spiegels, Pfade von `Cycle`/`AiNesting`/
 //!   `ModeConflict`; in Listen fehlen die Gruppen. `Mirroring` lesen darf eine KI gar nicht (`Forbidden`, nie mit
 //!   der Id einer verborgenen Gruppe). Die Antwort `Reason::ViaGroup` verbirgt eine Inhaber-Gruppe, die die
-//!   Fragende nicht lesen darf, wie `Inherited::from` (`holder = None`).
+//!   Fragende nicht lesen darf, wie `Inherited::from` (`holder = None`). "Gruppe mit Admin-Recht" heißt: in ihr
+//!   ist über `Membership.role` eine Admin-Rolle vergeben, oder ihr ist eine admin-wirksame Rolle zugeordnet
+//!   (`Protection::admin`, `role.rs`); dieselbe Verbergung gilt für admin-wirksame und sensible Rollen.
 //!
 //! Die Regel liegt im künftigen Crate `group-nesting` mit eigenen, über die Id generischen Typen; Anbieter
-//! bilden sie ab (`From`), dieser Ordner enthält keine Logik und re-exportiert nichts aus dem Crate.
+//! bilden sie ab (`From`), dieser Ordner enthält keine Logik und re-exportiert nichts aus dem Crate. Der
+//! Rollenbaum ist eine zweite Instanz derselben Regel mit denselben Typen dieser Datei (`role.rs`).
 //!
 //! Wirksame Mitglieder von G = direkte Mitglieder von G und die direkten Mitglieder jeder Gruppe X, von der ein
 //! gerichteter Weg X → … → G im Mitgliedsgraph führt (Hülle über alle Bögen, wie Kanidm `memberof`; ein Weg darf
 //! `BottomUp`- und `TopDown`-Bögen mischen, so wie Kanidm es auch tut). Rechnen: eine Breitensuche rückwärts ab G,
 //! O(Gruppen + Kanten + Mitgliedschaften); der erste Fund je Quelle ist der kürzeste Weg (`Inherited::via`).
+//! Es zählen nur Mitgliedschaften mit `InForce::Yes`; abgelaufene entfallen ganz (`limits.rs`); eine Person, die
+//! an einer Gruppe X gesperrt ist, ist weder wirksames Mitglied von X noch über X von einer Gruppe darüber.
 //! Kreise: verboten im Mitgliedsgraph (NACH der Umkehrung der `TopDown`-Kanten, VOR jedem Spiegeln; entsteht z. B.,
 //! wenn in einem Baum A in B und B in A steht) und im Baum selbst (alle Modi, auch `Single`); beides ist
 //! `Error::Cycle` mit Pfad. Kanidm selbst würde einen Kreis annehmen und jede Gruppe darin zum Mitglied jeder
 //! anderen machen; darum prüft fs-groups vorher. Tiefe jeder Kette höchstens `MAX_NESTING_DEPTH` KANTEN.
 //!
-//! Grenzfälle (Konformitätstests): Selbstkante (Kind = Eltern) = `Error::Cycle { path: [A, A] }`, in jedem Modus.
+//! Grenzfälle (Konformitätstests): Selbstkante (Kind = Eltern) = `Error::Cycle { path: [A, A] }`, in jedem Modus;
+//! ist A eine KI-Gruppe (bzw. KI-Rolle), gilt in jedem Modus `AiNesting` (`AiRoleForbidden`; sie wäre Eltern):
+//! die KI-Regel ist die speziellere und wird VOR Kreis, Tiefe und Sensibel geprüft (Festlegung 16.11.).
 //! Gleiches Paar noch einmal, in gleichem ODER anderem Modus = `Error::AlreadyThere(id der bestehenden Kante)`:
 //! nicht still idempotent, weil der Fehler die Id nennt; der Weg zu einem anderen Modus ist `change_nesting_mode`.
 //! Umgekehrtes Paar (B unter A, obwohl A unter B steht) = `Error::Cycle` (Baum). Diamanten und mehrere Wege
@@ -124,8 +132,9 @@ pub enum NestingSide {
     AsParent,
 }
 
-/// Was angefragt wird.
+/// Was angefragt wird. Gleicher Ablauf für Gruppen-Kanten, Rollen-Kanten und Zuordnungen Gruppe → Rolle.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum NestingRequestKind {
     /// Neue Kante mit diesem Modus.
     Link { mode: NestingMode },
@@ -137,15 +146,23 @@ pub enum NestingRequestKind {
         from: NestingMode,
         to: NestingMode,
     },
+    /// Rolle `parent` der Gruppe `child` zuordnen, mit Geltung `within` (`Roles::assign_role`); keine Kante.
+    Assign { within: Option<ObjectId> },
 }
 
 /// Lebenslauf einer Anfrage. Nur `Pending` lässt sich beantworten oder zurückziehen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum RequestState {
     Pending,
     Approved,
     Declined,
     Withdrawn,
+    /// Verfallen (Strategie 16.11.): eine offene Anfrage, die nicht in der Frist beantwortet wurde. Die Frist stellt
+    /// die GRUPPE ein (Einstellung in `admission_v1`, Standard 7 Tage); hier gelten nur Zustand und Regel:
+    /// abgelaufen = abgelehnt, eine neue Anfrage ist jederzeit möglich (kein `AlreadyThere`). Der Anbieter räumt
+    /// vor dem Lesen (wie `InvitationState::Expired`); Antworten darauf: `Error::RequestClosed(Expired)`.
+    Expired,
 }
 
 /// Anfrage an die Seite, die die fragende Person nicht verwaltet (wie eine Einladung, aber zwischen Gruppen).
@@ -201,15 +218,22 @@ pub struct Inherited {
 }
 
 /// Was eine Kante bewirken würde (für den Zustimmungsdialog beider Seiten), über die ganze Hülle: auch Gruppen
-/// weit oberhalb oder unterhalb und Geschwister über gemischte Wege. Nur Zahlen, keine Namen: die andere Seite
-/// erfährt nichts über Mitglieder, die sie nicht lesen darf.
+/// weit oberhalb oder unterhalb und Geschwister über gemischte Wege. Nur Zahlen, keine Namen und keine Ids.
+/// Gezählt wird NUR Lesbares (Strategie 16.11.: bei Art.-9-Gruppen verrät schon eine Zahl etwas): Gruppen, die die
+/// fragende Person lesen darf, und Personen nur aus Gruppen, deren Mitgliederliste sie nach `Visibility` lesen
+/// darf. Alles andere steht nur als `more_hidden` ("weitere, nicht sichtbar"), ohne Zahl. Im Rollenbaum ebenso
+/// (Rollen statt Gruppen, `Role::visibility`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NestingEffect {
     pub mode: NestingMode,
-    /// Zahl der Gruppen, deren wirksame Mitglieder sich ändern würden (nur die Zahl, keine Ids).
+    /// Zahl der LESBAREN Gruppen, deren wirksame Mitglieder sich ändern würden (nur die Zahl, keine Ids).
     pub groups_affected: u32,
-    /// Personen, die neu wirksames Mitglied mindestens einer betroffenen Gruppe würden.
+    /// Personen, die neu wirksames Mitglied mindestens einer betroffenen Gruppe mit lesbarer Mitgliederliste
+    /// würden.
     pub persons_gained: u32,
-    /// Personen, die wirksame Mitgliedschaft in mindestens einer betroffenen Gruppe verlören (Moduswechsel).
+    /// Personen, die wirksame Mitgliedschaft in mindestens einer betroffenen Gruppe mit lesbarer Mitgliederliste
+    /// verlören (Moduswechsel).
     pub persons_lost: u32,
+    /// `true`: es sind weitere Gruppen oder Mitgliederlisten betroffen, die die fragende Person nicht lesen darf.
+    pub more_hidden: bool,
 }

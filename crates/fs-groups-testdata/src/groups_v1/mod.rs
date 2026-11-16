@@ -1,14 +1,19 @@
 //! Thema `groups`, Ziel v1 (Sprung von "groups (draft)", `groups.capnp` fs-interfaces). Eigentümer: fs-groups
-//! (ADR 0050, 0055: fs-groups ist die Quelle der Wahrheit für Gruppen). Trait `Groups` (+ `Mirroring`).
+//! (ADR 0050, 0055: fs-groups ist die Quelle der Wahrheit für Gruppen und Rollen). Traits `Groups`, `Roles`
+//! (+ `Mirroring` für Gruppen und Rollen).
 //!
-//! KANDIDAT 2, NICHT GESPERRT (Pilot fs-groups, Stufe 2, 2026-11-16; Kandidat 2 = Verschachtelung mit Modus
-//! je Kante nach der Nutzerentscheidung O1). Gesperrt wird der ORDNER `groups_v1/` als Ganzes (ADR 0043: kleine
-//! Dateien, jede <= 300 Zeilen). Hash = `/srv/FreeSynergy/.scratch/tools/hash-ordner.sh groups_v1`. Dateien:
+//! KANDIDAT 3 = Rollen (Entscheidung 21, Nutzer 2026-11-16: Rollen IN `groups_v1`, kein `roles_v1`/`groups_v2`,
+//! weil vor dem ersten Release); NICHT GESPERRT. Vorgänger-Sperre `91c0f8b0…2faf3` (Kandidat 2, Verschachtelung
+//! mit Modus je Kante). Ordner: ADR 0043, Dateien <= 300 Zeilen; Hash = `tools/hash-ordner.sh groups_v1`. Dateien:
 //! `mod.rs` (dieser Kopf), `shared.rs` (`pub use` der Basistypen aus `fs-types`), `group.rs`, `nesting.rs`
-//! (Kante, Modus, Zustimmung, Regel der wirksamen Mitglieder), `members.rs`, `rights.rs`, `errors.rs`, `api.rs`
-//! (Trait `Groups`), `mirror.rs` (Trait `Mirroring`, verbrauchter Trait `GroupDirectory`), `provided.rs` (Trait
-//! `GroupMembers` für Kalender und Tasks), `consumed.rs` (verbrauchte Traits von fs-people). Ein anderer Name,
-//! Konstruktor oder Zugriff in `fs-types` ist ein Sprung (ADR 0045).
+//! (Kante, Modus, Zustimmung, Regel der wirksamen Mitglieder), `members.rs`, `limits.rs` (Befristung, Sperre),
+//! `appoint.rs` (Recht "Admins benennen", alle Wege, Geltung, Selbstvergabe, Türsteher),
+//! `rights.rs`, `errors.rs`, `api.rs`
+//! (Trait `Groups`), `mirror.rs` (Trait `Mirroring`, verbrauchter Trait `GroupDirectory`), `provided.rs` (Traits
+//! `GroupMembers` für Kalender und Tasks, `RoleBook` für fs-people), `consumed.rs` (verbrauchte Traits von
+//! fs-people und fs-admission), `role.rs` (Rolle, Rollenbaum), `role_holders.rs` (Zuordnung, wirksame Rollen,
+//! KI-Kette, Claim), `role_api.rs` (Trait `Roles`), `role_mirror.rs` (Werte der Spiegelung `role_*`; Plan und
+//! Verzeichnis in `mirror.rs`). Ein anderer Name, Konstruktor oder Zugriff in `fs-types` ist ein Sprung (ADR 0045).
 //!
 //! Pattern: Repository + Port (Trait). Jede Methode ist Pflicht, kein Standard `not_possible`, keine
 //! Fähigkeitsabfrage zur Laufzeit, kein `Unsupported` (Muster `packages_v1`, Ziel "keine toten Knöpfe"): was die
@@ -20,8 +25,9 @@
 //!   einer beliebigen Person, schreibt aber nichts. Die Uhr ist ebenfalls Eigenschaft des Anbieters (Ablauf von
 //!   Einladungen, Papierkorbfrist); kein `now`-Parameter.
 //! - Jedes Schreiben auf ein bestehendes Objekt ist Vergleich-und-Setzen gegen `expected: Revision`
-//!   (`Error::Changed`). Ausgenommen: Anlegen (`create`, `add_member`, `invite`, `grant`, `request_nesting`) und
-//!   `restore`; `restore` meldet `Changed`, wenn die Gruppe seit dem Löschen geändert wurde (Konformitätstest).
+//!   (`Error::Changed`). Ausgenommen: Anlegen (`create`, `add_member`, `admit_member`, `invite`, `grant`,
+//!   `request_nesting`) und `restore`; `restore` meldet `Changed`, wenn die Gruppe seit dem Löschen geändert
+//!   wurde (Konformitätstest).
 //! - Löschen einer Gruppe = Papierkorb mit Frist (`restorable_until`); `restore` holt die Gruppe samt
 //!   Mitgliedschaften, Einladungen, Rechten und Kanten zurück. Endgültiges Löschen nach der Frist
 //!   (ADR 0073 "wirklich löschen"). Mitglied entfernen und Recht entziehen haben keinen Papierkorb: der Rückweg
@@ -43,6 +49,14 @@
 //! - Eine KI hat an Gruppen mit Admin-Recht und an sensiblen Gruppen gar keinen Zugriff und sieht sie nicht
 //!   (jede Methode antwortet wie für eine nicht vorhandene Id, in Listen fehlen sie; Nutzerentscheidung
 //!   2026-11-16, Details `nesting.rs`).
+//! - Rollen (Entscheidung 21; `role.rs`, `role_holders.rs`): fs-groups ist Leitquelle für Rollen-Definitionen,
+//!   Rollenbaum und Zuordnungen; fs-people zeigt an, Kanidm spiegelt (`role_*`), schreibt nie zurück. Rollen gehen
+//!   an Personen UND Gruppen (Zuordnung Gruppe → Rolle, keine Kante; `Membership.role` bleibt), sind
+//!   verschachtelbar (eigener Rollenbaum, gleiche Modi und Regeln, Vorgabe `BottomUp`); die KI-Regel gilt über
+//!   die ganze Kette (`AiRoleForbidden`). Aufnahme/Türsteher sind ein eigener Baustein (`admission_v1`); hier nur
+//!   die Pflichtprüfung `ModeConflict(SelfManaged)` und die Auskunft `Roles::protection`.
+//! - `#[non_exhaustive]` (ADR-0045-Nachtrag, Strategie 16.11. Frage 6) tragen die Fehler- und Ergebnis-Enums, die
+//!   wachsen können; Eingabe-Typen und Structs nicht. Eine spätere Variante ändert trotzdem den Hash (= v2).
 //! - Reihenfolge von `Vec`-Feldern ist nicht Vertrag, außer wo das Doc sie nennt (Konformitätstests vergleichen
 //!   als Menge). Ein fallengelassenes Future bricht kein mehrschrittiges Schreiben ab (Kaskaden laufen zu Ende).
 //!
@@ -63,23 +77,35 @@
 #![allow(clippy::module_name_repetitions, clippy::missing_errors_doc)]
 
 mod api;
+mod appoint;
 mod consumed;
 mod errors;
 mod group;
+mod limits;
 mod members;
 mod mirror;
 mod nesting;
 mod provided;
 mod rights;
+mod role;
+mod role_api;
+mod role_holders;
+mod role_mirror;
 pub mod shared;
 
 pub use api::*;
+pub use appoint::*;
 pub use consumed::*;
 pub use errors::*;
 pub use group::*;
+pub use limits::*;
 pub use members::*;
 pub use mirror::*;
 pub use nesting::*;
 pub use provided::*;
 pub use rights::*;
+pub use role::*;
+pub use role_api::*;
+pub use role_holders::*;
+pub use role_mirror::*;
 pub use shared::*;

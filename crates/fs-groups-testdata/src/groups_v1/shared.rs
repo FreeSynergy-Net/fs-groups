@@ -5,5 +5,5 @@
 
 pub use fs_types::PageCursor as Place;
 pub use fs_types::{
-    BasicValue, ObjectId, Page, PersonArt, PersonRef, Reference, Revision, TypeProblem, Utc,
+    BasicValue, Date, ObjectId, Page, PersonArt, PersonRef, Reference, Revision, TypeProblem, Utc,
 };
