@@ -4,6 +4,8 @@ description = "Program core of FreeSynergy groups: nested groups, memberships, i
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]

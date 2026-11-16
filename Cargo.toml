@@ -4,6 +4,8 @@ members = ["crates/fs-groups-core", "crates/fs-groups-testdata", "crates/fs-grou
 
 [workspace.package]
 version = "0.0.2"
+authors = ["FreeSynergy <support@freesynergy.net>"]
+repository = "https://github.com/FreeSynergy/fs-groups"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.85"

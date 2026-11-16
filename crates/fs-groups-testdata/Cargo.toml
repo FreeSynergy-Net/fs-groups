@@ -4,6 +4,8 @@ description = "Test providers, conformance rules and fixed sample data of FreeSy
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
 rust-version.workspace = true
 publish = false
 
