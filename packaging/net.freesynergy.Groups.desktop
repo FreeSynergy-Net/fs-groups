@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=FreeSynergy.Groups
+Comment=Manage groups and memberships
+Exec=fs-groups
+Icon=net.freesynergy.Groups
+Terminal=false
+Categories=Office;Network;
