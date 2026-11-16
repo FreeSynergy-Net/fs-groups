@@ -24,7 +24,7 @@ Latest tag: `v0.0.2`.
 
 ## What is not there yet
 
-- No window, no server, and no live change feed.
+- No live change feed: the window shows a change made elsewhere only after it reads the groups again.
 - Delegated rights only answer questions. Nothing else enforces them yet.
 - No authentication yet.
 - Several rules are provisional while the owner decides them: what "up" and "down" mean for rights between a group and its parent, and who must agree to a nesting link.
