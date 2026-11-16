@@ -5,6 +5,7 @@
 //! fs-groups                          the window (feature `gui`, on by default)
 //! fs-groups [--socket F] [--size WxH] [--snapshot F.png]
 //! fs-groups serve                    the server (Cap'n Proto, groups.capnp)
+//! fs-groups --version               the version, without opening anything
 //! ```
 
 use std::process::ExitCode;
@@ -14,6 +15,10 @@ use fs_groups_server::ServeError;
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
+        Some("--version" | "-V") => {
+            println!("fs-groups {}", env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
         Some("serve") => serve(&args[1..]),
         // `fs-groups --socket PATH serve`: the option may stand before the word.
         Some("--socket") if args.get(2).map(String::as_str) == Some("serve") => {
