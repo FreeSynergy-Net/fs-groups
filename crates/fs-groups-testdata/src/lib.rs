@@ -4,6 +4,7 @@
 //! Pattern: Fake behind a locked Repository trait (the trait is the folder [`groups_v1`], byte for byte the locked one).
 //!
 //! * [`groups_v1`]: the LOCKED trait folder (SHA-256 91c0f8b0...2faf3); never edit it, a change is `groups_v2`.
+//! * [`draft`]: the unlocked trait delta `groups_v2` (ADR 0095) and its conformance skeleton (probe, no lock).
 //! * [`FakeGroups`]: in memory, every method and rule of `Groups`, `Mirroring` and `GroupMembers`; [`EmptyGroups`] the
 //!   empty one; [`FakePeople`] the consumed fs-people side; [`FakeMirror`] the Kanidm side.
 //! * [`sample`]: the fixed set (16 groups and 20 persons, a `TopDown` chain of nine levels, every case of the plan).
@@ -28,6 +29,7 @@ mod decorate;
 mod decorate_groups;
 mod decorate_other;
 mod doubles;
+pub mod draft;
 mod fake;
 mod fake_impl;
 mod fake_mirror;
