@@ -10,6 +10,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+# Only for the lossless mapping between the contract types and the core types (`core_map`).
+fs-groups-core = { path = "../fs-groups-core" }
 async-trait = "0.1"
 # Same pin as the locked trait folder (groups_v1): fs-types v0.0.22 = fs-interfaces 7743056.
 fs-types = { git = "https://github.com/FreeSynergy/fs-interfaces", tag = "v0.0.22" }

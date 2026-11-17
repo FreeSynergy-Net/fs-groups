@@ -112,32 +112,53 @@ impl GroupRepo {
         w.membership_of(new.id).await
     }
 
+    /// `group.delete`, asked by the identity this repository was built with (the acting person or
+    /// program). The same check as [`GroupRepo::delete_by`]; the refusal says why.
+    pub async fn delete(&self, id: ObjectId) -> Result<()> {
+        self.delete_by(id, &self.actor.clone()).await
+    }
+
     /// `group.delete`, asked by `actor`: only an owner may delete a group. A group without any owner
-    /// (older data) may be deleted by a manager; the installer may always. Anyone else:
-    /// [`Error::Forbidden`].
+    /// (older data) may be deleted by a manager, or by the one who created it while it has no
+    /// manager either; the installer may always. Anyone else: [`Error::Forbidden`] with the reason.
     pub async fn delete_by(&self, id: ObjectId, actor: &str) -> Result<()> {
-        let actor = text::person("actor", actor)?;
+        let who = text::person("actor", actor)
+            .map_err(|_| Error::Forbidden(format!("{actor:?} is not a usable identity")))?;
+        // a stored group that cannot be read as a group has no owner to protect and can still go
+        let Some(group) = self.get(id).await? else {
+            return self.delete_unchecked(id).await;
+        };
         let members = self.direct(id).await?;
         let holds = |wanted: fn(&Role) -> bool| {
             members.iter().any(|m| {
-                m.in_force && m.member == Member::Person(actor.clone()) && wanted(&m.typed_role())
+                m.in_force && m.member == Member::Person(who.clone()) && wanted(&m.typed_role())
             })
         };
+        let in_force = |m: &&Membership| m.in_force;
         let any_owner = members
             .iter()
-            .any(|m| m.in_force && m.typed_role() == Role::Owner);
-        let allowed = self.installer() == Some(actor.as_str())
+            .filter(in_force)
+            .any(|m| m.typed_role() == Role::Owner);
+        let any_admin = members
+            .iter()
+            .filter(in_force)
+            .any(|m| m.typed_role().is_admin());
+        let creator = group.envelope.attributed_to.as_deref() == Some(who.as_str());
+        let allowed = self.installer() == Some(who.as_str())
             || if any_owner {
                 holds(|r| *r == Role::Owner)
-            } else {
+            } else if any_admin {
                 holds(Role::is_admin)
+            } else {
+                creator
             };
         if !allowed {
             return Err(Error::Forbidden(format!(
-                "{actor} may not delete group {id}: only an owner may"
+                "{who} may not delete group {id}: only an owner may (a group with no owner: a \
+                 manager, or its creator while it has no manager)"
             )));
         }
-        self.delete(id).await
+        self.delete_unchecked(id).await
     }
 }
 

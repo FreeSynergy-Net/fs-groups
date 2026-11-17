@@ -34,7 +34,7 @@ mod unsupported;
 
 pub use error::{Error, Result};
 pub use flow::MemberFlow;
-pub use graph::Graph;
+pub use graph::{Graph, MAX_NESTING_DEPTH};
 pub use invitation_state::Step;
 pub use mirror::{
     AdminRule, Bar, Change, Divergence, Enforced, Mirror, Scope, SyncReport, Verdict, Wanted,

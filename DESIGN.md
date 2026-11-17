@@ -245,9 +245,12 @@ Ids are typed: a source id is `NotFound` for `revoke_delivery` and a delivery id
 
 ## Roles, protection, modes (core only; the window follows)
 - Roles are the fixed list `Role` (member, manager, owner); older free texts read as `Role::Legacy` and cannot be written through `add_role` / `set_role`. The wire still carries the role text (`""`, `manager`, `owner`).
-- `protect::check_change` is the one place of "the last owner / manager is protected". `transfer_ownership` writes the new owner first, so a failure half way leaves two owners, never none. Only a name is compared; nothing authenticates the caller (see above).
+- `protect::check_change` is the one place of "the last owner / manager is protected". `transfer_ownership` writes the new owner first, so a failure half way leaves two owners, never none. **Honest limit:** real atomicity (a database transaction) comes with the typed storage (ADR 0086); until then these multi-write steps are only order-safe. Only a name is compared; nothing authenticates the caller (see above).
 - Each edge has a mode (`BottomUp` default, `TopDown`, `Single`, ADR 0082), kept in the child as `fs:parentModes`; `flow::MemberFlow` turns the modes into the member graph. A change that adds a flow needs the parent's consent (a `ParentRequest` of kind `ChangeMode`); a change to `Single` is at once.
-- Not yet: these operations are inherent methods of `GroupRepo`, not on the traits and not on the wire; the mirror (Kanidm) still ignores the modes; no depth limit of 16 edges.
+- `delete` has no unchecked form: it asks `delete_by` with the repository's own actor (owner; with no owner a manager, or the creator while there is no manager; the installer always) and the refusal names the reason. The longest chain is 16 edges (`MAX_NESTING_DEPTH`, `Error::TooDeep`), as in the contract.
+- **One model:** the contract `groups_v1` is the source. `Role::iri` / `Role::from_iri` and `fs_groups_testdata::{role_to_ref, ref_to_role, mode_to_contract, mode_from_contract}` map the core types to and from `RoleRef` and `NestingMode` without loss (tested both ways). What the contract lacks (the owner role as a fixed value, `LastOwner`, a mode per edge, `transfer_ownership`, `effective_origins`) is a `groups_v2` trait delta, not a second type world.
+- **Mirror (Kanidm):** it knows no modes. It receives nesting as before, which is `BottomUp` (the Kanidm behaviour); `TopDown` and `Single` edges are not mapped there yet.
+- Not yet: these operations are inherent methods of `GroupRepo`, not on the traits and not on the wire.
 
 ## Open points
 

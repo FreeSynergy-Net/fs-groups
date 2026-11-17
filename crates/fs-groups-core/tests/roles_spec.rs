@@ -77,3 +77,29 @@ fn property_no_single_removal_empties_the_owners() {
         }
     }
 }
+
+#[test]
+fn a_role_and_its_iri_map_both_ways() {
+    for r in [
+        Role::Member,
+        Role::Manager,
+        Role::Owner,
+        Role::Legacy("boss".into()),
+        Role::Legacy("a b/ü%".into()),
+        Role::Legacy("https://example.org/roles/chair".into()),
+        Role::Legacy(String::new()),
+    ] {
+        assert_eq!(Role::from_iri(&r.iri()), r, "{r:?}");
+    }
+    // every IRI comes back unchanged through a role
+    for iri in [
+        "https://example.org/roles/x",
+        "urn:x:y",
+        "https://freesynergy.net/ns#role/owner",
+        "https://freesynergy.net/ns#role/legacy/a%20b",
+        "https://freesynergy.net/ns#role/legacy/%zz",
+        "https://freesynergy.net/ns#role/nothing",
+    ] {
+        assert_eq!(Role::from_iri(iri).iri(), iri, "{iri}");
+    }
+}

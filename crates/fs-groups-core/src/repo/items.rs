@@ -104,9 +104,10 @@ impl GroupRepo {
         })
     }
 
-    /// `group.delete`: remove the group with its memberships, invitations, delegations (also the ones
+    /// The cascade of `group.delete`, with no check of who asks: only `delete_by` and `delete` call it.
+    /// Removes the group with its memberships, invitations, delegations (also the ones
     /// it holds) and its links to parents and children. Children stay.
-    pub async fn delete(&self, id: ObjectId) -> Result<()> {
+    pub(super) async fn delete_unchecked(&self, id: ObjectId) -> Result<()> {
         let w = self.writer().await;
         // a stored group that cannot be read as a group can still be deleted
         let stored = w.load(id).await?.is_some_and(|o| {

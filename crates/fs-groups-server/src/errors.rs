@@ -40,6 +40,7 @@ pub(crate) fn rpc_error(e: Error) -> capnp::Error {
         Error::Expired(_) => problem(EXPIRED, "Invitation expired", 410),
         Error::LastOwner { .. } => problem(LAST_OWNER, "Last owner", 409),
         Error::LastManager { .. } => problem(LAST_MANAGER, "Last manager", 409),
+        Error::TooDeep { .. } => problem(CONFLICT, "Nesting too deep", 409),
         Error::NotMember { .. } => problem(NOT_FOUND, "Not a member", 404),
         Error::Invalid(_) | Error::UnknownRole(_) => invalid_request(text),
         Error::Directory(_) => problem(DIRECTORY, "Directory failed", 502),

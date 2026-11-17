@@ -8,6 +8,7 @@
 - `transfer_ownership` hands the ownership over in one step; `delete_by` lets only an owner delete a group; `leave` ends a person's membership.
 - Nesting mode per edge (ADR 0082): `NestingMode` BottomUp / TopDown / Single, preselected per parent (`set_default_mode`), asked with `request_parent_in`, changed with `request_mode_change` (consent) or `set_single` (at once). Edges without a recorded mode stay BottomUp.
 - `effective_origins` answers per person: direct, or inherited from which group along which path, modes respected (`effective`, `groups_of`, `is_member` follow the modes too).
+- `delete` has no unchecked form any more (the actor must be allowed, the refusal names why); the longest nesting chain is 16 edges (`Error::TooDeep`); roles and modes map losslessly to the contract types (`RoleRef`, `NestingMode`); the Kanidm mirror still knows only `BottomUp`.
 
 ### Deutsch
 - Nur Kern (das Fenster folgt später; keine Änderung an Trait, Wire oder Fenster): feste, typisierte Rollenliste `Role` (Mitglied, Verwalter, Eigentümer; Texte von vor der Liste lesen sich als `Role::Legacy`) mit `add_role` und `set_role`.
@@ -15,6 +16,7 @@
 - `transfer_ownership` überträgt das Eigentum in einem Schritt; `delete_by` lässt nur einen Eigentümer die Gruppe löschen; `leave` beendet die Mitgliedschaft einer Person.
 - Vererbungsmodus je Kante (ADR 0082): `NestingMode` BottomUp / TopDown / Einzeln, je Eltern vorgewählt (`set_default_mode`), angefragt mit `request_parent_in`, geändert mit `request_mode_change` (Zustimmung) oder `set_single` (sofort). Kanten ohne gespeicherten Modus bleiben BottomUp.
 - `effective_origins` antwortet je Person: direkt oder geerbt von welcher Gruppe über welchen Pfad, Modi beachtet (`effective`, `groups_of`, `is_member` folgen den Modi ebenfalls).
+- `delete` hat keine ungeprüfte Form mehr (der Akteur muss dürfen, die Ablehnung nennt den Grund); die längste Verschachtelungskette hat 16 Kanten (`Error::TooDeep`); Rollen und Modi bilden verlustfrei auf die Vertragstypen (`RoleRef`, `NestingMode`) ab; der Kanidm-Spiegel kennt weiter nur `BottomUp`.
 
 ## 0.0.2
 

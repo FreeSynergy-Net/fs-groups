@@ -90,6 +90,19 @@ pub enum Error {
         /// The person who would have gone.
         person: String,
     },
+    /// The nesting would make a chain of more than [`MAX_NESTING_DEPTH`](crate::graph::MAX_NESTING_DEPTH) edges.
+    #[error(
+        "refused: nesting {group} under {parent} makes a chain of {depth} edges (at most {})",
+        crate::graph::MAX_NESTING_DEPTH
+    )]
+    TooDeep {
+        /// The group that was to get a parent.
+        group: ObjectId,
+        /// The proposed parent.
+        parent: ObjectId,
+        /// Edges of the longest chain through the new edge.
+        depth: usize,
+    },
     /// The person is not a direct member of the group.
     #[error("{person} is not a member of group {group}")]
     NotMember {

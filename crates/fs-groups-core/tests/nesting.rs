@@ -76,11 +76,12 @@ async fn a_loop_is_refused_with_the_chain_that_closes_it() {
 
 #[tokio::test]
 async fn a_long_chain_is_walked_and_its_loop_refused() {
-    let r = repo().await;
+    // longer than the 16 edges nesting allows: planted as data from outside, which must still be walked
+    let (r, store) = common::setup().await;
     let mut ids = vec![r.create("g0", "team").await.unwrap().id];
     for i in 1..150 {
         let g = r.create(&format!("g{i}"), "team").await.unwrap();
-        common::link(&r, g.id, *ids.last().unwrap()).await;
+        common::force_parent(&store, g.id, *ids.last().unwrap()).await;
         ids.push(g.id);
     }
     assert_eq!(r.ancestors(ids[149]).await.unwrap().len(), 149);

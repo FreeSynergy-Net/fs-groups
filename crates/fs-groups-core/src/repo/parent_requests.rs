@@ -19,6 +19,7 @@ use super::consts::{AS2_TYPE, CONTEXT, PARENT_REQUEST_TYPE};
 use super::envelope::context;
 use super::handle::{GroupRepo, Writer};
 use crate::error::{Error, Result};
+use crate::graph::MAX_NESTING_DEPTH;
 use crate::model::{Group, NestingMode, ParentRequest, RequestKind, RequestState, Right};
 
 impl GroupRepo {
@@ -189,7 +190,7 @@ impl Writer<'_> {
         self.put(o).await
     }
 
-    /// Both groups exist and `parent` is not `child` or one of its descendants.
+    /// Both groups exist, `parent` is not `child` or one of its descendants, and the chain stays short.
     async fn refuse_cycle(&self, child: ObjectId, parent: ObjectId) -> Result<()> {
         let graph = self.known_graph(child).await?;
         if !graph.contains(parent) {
@@ -198,14 +199,23 @@ impl Writer<'_> {
                 id: parent,
             });
         }
-        match graph.path_up(parent, child) {
-            Some(path) => Err(Error::Cycle {
+        if let Some(path) = graph.path_up(parent, child) {
+            return Err(Error::Cycle {
                 group: child,
                 parent,
                 path,
-            }),
-            None => Ok(()),
+            });
         }
+        // a chain through the new edge: what is above the parent, the edge, what is below the child
+        let depth = graph.longest_chain(parent, true) + 1 + graph.longest_chain(child, false);
+        if depth > MAX_NESTING_DEPTH {
+            return Err(Error::TooDeep {
+                group: child,
+                parent,
+                depth,
+            });
+        }
+        Ok(())
     }
 
     /// Whether the actor may answer for `parent`: nobody holds any delegation on `parent` yet and the

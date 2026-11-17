@@ -24,6 +24,7 @@ pub mod groups_v1;
 mod access;
 mod bridge;
 pub mod conformance;
+mod core_map;
 mod decorate;
 mod decorate_groups;
 mod decorate_other;
@@ -57,6 +58,7 @@ mod sample_data;
 mod state;
 mod validate;
 
+pub use core_map::{mode_from_contract, mode_to_contract, ref_to_role, role_to_ref};
 pub use decorate::{Decorated, Gate, Op, Provider};
 pub use doubles::{Clock, FailGate, FailingGroups, SlowGate, SlowGroups, forbidden, unavailable};
 pub use fake::{DECISIONS, EmptyGroups, FakeGroups, START_MS};

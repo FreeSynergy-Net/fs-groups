@@ -16,7 +16,7 @@ What is different here: groups work alone, with no directory server needed. If y
 Latest tag: `v0.0.2`.
 
 - Create, rename, list and delete groups; nest them; ask a parent to accept a child.
-- Add members with a role from the fixed list (member, manager, owner; the last owner is protected, ownership can be handed over; core only, the window follows); ask "is this person in this group, and through which path?".
+- Add members with a role from the fixed list (member, manager, owner; the last owner is protected, ownership can be handed over; core only, the window follows; the Kanidm mirror knows only `BottomUp`, the Kanidm behaviour, not `TopDown` or `Single`); ask "is this person in this group, and through which path?".
 - Invitations with expiry; accepting makes the membership for the invited person only.
 - Delegate and revoke rights, and ask "may this person do this?".
 - Mirror groups to a directory behind the `GroupDirectory` interface; the Kanidm adapter is in [fs-identity](https://github.com/FreeSynergy/fs-identity). The mirror can be repeated safely, repairs manual changes and removes only what it created.

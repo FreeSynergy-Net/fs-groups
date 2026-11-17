@@ -9,6 +9,10 @@ use fs_objects::ObjectId;
 
 use crate::model::Group;
 
+/// The longest chain of nesting edges allowed (17 groups), as in the contract `groups_v1`. It keeps
+/// display, calculation and explanation ("inherited from ... via ...") manageable.
+pub const MAX_NESTING_DEPTH: usize = 16;
+
 /// Parents and children of all groups, loaded once.
 #[derive(Clone, Debug, Default)]
 pub struct Graph {
@@ -80,6 +84,34 @@ impl Graph {
             .into_iter()
             .find(|(id, _)| *id == to)
             .map(|(_, path)| path)
+    }
+
+    /// Edges of the longest chain from `start` upward (`up`) or downward; 0 for none. Ends on any
+    /// data: a group met again on the current chain (a loop from outside) is not followed.
+    pub fn longest_chain(&self, start: ObjectId, up: bool) -> usize {
+        fn go(
+            g: &Graph,
+            id: ObjectId,
+            up: bool,
+            stack: &mut Vec<ObjectId>,
+            memo: &mut BTreeMap<ObjectId, usize>,
+        ) -> usize {
+            if let Some(n) = memo.get(&id) {
+                return *n;
+            }
+            stack.push(id);
+            let next = if up { g.parents(id) } else { g.children(id) };
+            let mut best = 0;
+            for n in next {
+                if !stack.contains(n) {
+                    best = best.max(1 + go(g, *n, up, stack, memo));
+                }
+            }
+            stack.pop();
+            memo.insert(id, best);
+            best
+        }
+        go(self, start, up, &mut vec![], &mut BTreeMap::new())
     }
 
     /// Children before their parents, so a directory can refer to a nested group that exists.
