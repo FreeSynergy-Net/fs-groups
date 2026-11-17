@@ -33,6 +33,7 @@ impl GroupRepo {
             return Ok(g);
         }
         g.parents.retain(|p| *p != parent);
+        g.parent_modes.remove(&parent);
         w.save(&g).await
     }
 

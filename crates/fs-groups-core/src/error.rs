@@ -73,6 +73,34 @@ pub enum Error {
     /// The acting person may not do this (see the notes on what is and is not enforced in `DESIGN.md`).
     #[error("forbidden: {0}")]
     Forbidden(String),
+    /// The last owner of a group cannot leave, be removed or be demoted: the group would have none.
+    /// Hand the ownership over first (`transfer_ownership`).
+    #[error("refused: {person} is the last owner of group {group}; hand the ownership over first")]
+    LastOwner {
+        /// The group.
+        group: ObjectId,
+        /// The person who would have gone.
+        person: String,
+    },
+    /// The last manager of a group (one with no owner) cannot leave, be removed or be demoted.
+    #[error("refused: {person} is the last manager of group {group}; name another manager first")]
+    LastManager {
+        /// The group.
+        group: ObjectId,
+        /// The person who would have gone.
+        person: String,
+    },
+    /// The person is not a direct member of the group.
+    #[error("{person} is not a member of group {group}")]
+    NotMember {
+        /// The group.
+        group: ObjectId,
+        /// The person.
+        person: String,
+    },
+    /// A role text outside the fixed list (member, manager, owner) cannot be written.
+    #[error("unknown role {0:?}: use member, manager or owner")]
+    UnknownRole(String),
     /// The directory applied the group but could not map these people (they are left out).
     #[error("directory could not map these people: {}", .0.join(", "))]
     Unmapped(Vec<String>),

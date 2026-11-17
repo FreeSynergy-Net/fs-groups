@@ -15,6 +15,8 @@ const NOT_INVITEE: &str = "https://freesynergy.net/problems/groups/not-invitee";
 const FORBIDDEN: &str = "https://freesynergy.net/problems/groups/forbidden";
 const UNMAPPED: &str = "https://freesynergy.net/problems/groups/unmapped";
 const EXPIRED: &str = "https://freesynergy.net/problems/groups/expired";
+const LAST_OWNER: &str = "https://freesynergy.net/problems/groups/last-owner";
+const LAST_MANAGER: &str = "https://freesynergy.net/problems/groups/last-manager";
 const DIRECTORY: &str = "https://freesynergy.net/problems/groups/directory";
 
 /// A core error as an RPC error.
@@ -36,7 +38,10 @@ pub(crate) fn rpc_error(e: Error) -> capnp::Error {
         }
         Error::Unmapped(_) => problem(UNMAPPED, "People not mapped", 502),
         Error::Expired(_) => problem(EXPIRED, "Invitation expired", 410),
-        Error::Invalid(_) => invalid_request(text),
+        Error::LastOwner { .. } => problem(LAST_OWNER, "Last owner", 409),
+        Error::LastManager { .. } => problem(LAST_MANAGER, "Last manager", 409),
+        Error::NotMember { .. } => problem(NOT_FOUND, "Not a member", 404),
+        Error::Invalid(_) | Error::UnknownRole(_) => invalid_request(text),
         Error::Directory(_) => problem(DIRECTORY, "Directory failed", 502),
         Error::Store(store) => store_error(&store),
         Error::Json(_) => failed(text),

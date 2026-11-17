@@ -1,7 +1,8 @@
-//! Effective membership: through nested groups, with the path.
+//! Effective membership: through nested groups, with origin and path, the modes of the edges respected.
 //!
-//! Pattern: Visitor over the in-memory `Graph` — a person in a child belongs to every ancestor.
-//! The walk visits each group once, so it ends on any data.
+//! Pattern: Visitor over the in-memory `MemberFlow` — members flow along the arcs the modes make
+//! (`BottomUp` up, `TopDown` down, `Single` not at all). The walk visits each group once, so it ends
+//! on any data. The shortest path wins; other sources are listed as alternatives.
 
 use std::collections::BTreeSet;
 
@@ -9,36 +10,66 @@ use fs_objects::{ObjectId, Query};
 
 use super::handle::GroupRepo;
 use crate::error::Result;
-use crate::model::{EffectiveMember, Member};
+use crate::flow::MemberFlow;
+use crate::model::{EffectiveMember, EffectiveOrigin, Member, Origin};
 
 impl GroupRepo {
-    /// `member.read`: everyone who belongs to `group`, nested groups included. Each person once, with
-    /// the shortest path: `[group]` for a direct member, `[group, child, ...]` further down.
-    pub async fn effective(&self, group: ObjectId) -> Result<Vec<EffectiveMember>> {
-        let graph = self.known_graph(group).await?;
-        let mut nodes = vec![(group, vec![group])];
-        nodes.extend(graph.descendants_with_paths(group));
-        let mut seen = BTreeSet::new();
-        let mut out = vec![];
-        for (node, path) in nodes {
+    /// `member.read`: everyone who belongs to `group`, each person once, with where it comes from:
+    /// a direct membership, or inherited from the group of a direct membership along `via` (the
+    /// shortest path), the modes of all edges respected. `also` lists further sources, each with its
+    /// shortest path.
+    pub async fn effective_origins(&self, group: ObjectId) -> Result<Vec<EffectiveOrigin>> {
+        self.require(group).await?;
+        let flow = MemberFlow::from_groups(&self.all_groups().await?);
+        let mut out: Vec<EffectiveOrigin> = vec![];
+        for (node, path) in flow.sources_of(group) {
             for m in self.direct(node).await? {
-                if let Member::Person(p) = m.member {
-                    if seen.insert(p.clone()) {
-                        out.push(EffectiveMember {
-                            person: p,
-                            via: path.clone(),
-                        });
+                let Member::Person(p) = m.member else {
+                    continue;
+                };
+                match out.iter_mut().find(|e| e.person == p) {
+                    Some(e) => {
+                        if !e.also.contains(&path) && e.via != path {
+                            e.also.push(path.clone());
+                        }
                     }
+                    None => out.push(EffectiveOrigin {
+                        person: p,
+                        origin: if node == group {
+                            Origin::Direct
+                        } else {
+                            Origin::Inherited(node)
+                        },
+                        via: path.clone(),
+                        also: vec![],
+                    }),
                 }
             }
         }
         Ok(out)
     }
 
-    /// `member.read`: the groups a person belongs to: the ones they are in, and all their ancestors.
+    /// `member.read`: everyone who belongs to `group`, each person once, with the shortest path:
+    /// `[group]` for a direct member, further along the way members flow otherwise.
+    pub async fn effective(&self, group: ObjectId) -> Result<Vec<EffectiveMember>> {
+        Ok(self
+            .effective_origins(group)
+            .await?
+            .into_iter()
+            .map(|e| EffectiveMember {
+                person: e.person,
+                via: e.via,
+            })
+            .collect())
+    }
+
+    /// `member.read`: the groups a person belongs to: the ones they are in, and every group their
+    /// membership flows into (modes respected).
     pub async fn groups_of(&self, person: &str) -> Result<Vec<ObjectId>> {
         let person = person.trim();
-        let graph = self.graph().await?;
+        let groups = self.all_groups().await?;
+        let known: BTreeSet<_> = groups.iter().map(|g| g.id).collect();
+        let flow = MemberFlow::from_groups(&groups);
         let q = Query::new()
             .with_index("member_kind", "person")
             .with_index("member", person);
@@ -47,10 +78,9 @@ impl GroupRepo {
             .memberships(q)
             .await?
             .into_iter()
-            .filter(|m| graph.contains(m.group))
+            .filter(|m| known.contains(&m.group))
         {
-            all.insert(m.group);
-            all.extend(graph.ancestors(m.group));
+            all.extend(flow.reach_from(m.group));
         }
         Ok(all.into_iter().collect())
     }

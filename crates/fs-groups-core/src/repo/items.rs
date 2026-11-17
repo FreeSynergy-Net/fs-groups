@@ -139,6 +139,7 @@ impl GroupRepo {
             .filter(|g| g.parents.contains(&id))
         {
             child.parents.retain(|p| *p != id);
+            child.parent_modes.remove(&id);
             w.save(&child).await?;
         }
         w.remove_object(id).await?;

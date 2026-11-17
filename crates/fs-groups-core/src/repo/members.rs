@@ -11,7 +11,8 @@ use super::consts::{AS2_TYPE, CONTEXT, MEMBERSHIP_TYPE, ORG_MEMBERSHIP};
 use super::envelope::{context, with_nonempty};
 use super::handle::{GroupRepo, Writer};
 use crate::error::{Error, Result};
-use crate::model::{Member, Membership};
+use crate::model::{Member, Membership, Role};
+use crate::protect;
 use crate::text;
 
 impl GroupRepo {
@@ -35,7 +36,8 @@ impl GroupRepo {
             .await
     }
 
-    /// `member.remove`: end a membership.
+    /// `member.remove`: end a membership. The last owner of a group (or, with no owner, its last
+    /// manager) is refused with [`Error::LastOwner`] / [`Error::LastManager`].
     pub async fn remove(&self, membership: ObjectId) -> Result<()> {
         let w = self.writer().await;
         let found = w.load(membership).await?;
@@ -48,6 +50,13 @@ impl GroupRepo {
                 what: "membership",
                 id: membership,
             });
+        }
+        // the last owner / manager is protected; an unreadable membership has no role to protect
+        if let Some(m) = found.as_ref().and_then(codec::membership) {
+            if let Ok(before) = w.direct(m.group).await {
+                let after: Vec<_> = before.iter().filter(|x| x.id != m.id).cloned().collect();
+                protect::check_change(m.group, &before, &after)?;
+            }
         }
         w.remove_object(membership).await
     }
@@ -101,7 +110,7 @@ impl Writer<'_> {
             .direct(group)
             .await?
             .into_iter()
-            .find(|m| m.member == member && m.role == role)
+            .find(|m| m.member == member && m.typed_role() == Role::parse(role))
         {
             return Ok(same);
         }

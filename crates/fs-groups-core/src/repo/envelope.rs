@@ -56,6 +56,8 @@ impl GroupRepo {
             name: name.into(),
             kind: kind.into(),
             parents: vec![],
+            parent_modes: std::collections::BTreeMap::default(),
+            default_mode: crate::model::NestingMode::default(),
             right_flow: crate::model::RightFlow::default(),
             envelope,
         }

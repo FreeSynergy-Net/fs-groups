@@ -4,6 +4,8 @@
 
 use fs_objects::ObjectId;
 
+use super::Role;
+
 /// A person (IRI of a person in fs-people, or an actor) or a group.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Member {
@@ -49,12 +51,20 @@ pub struct Membership {
     pub group: ObjectId,
     /// The member (a person; see `DESIGN.md` for why not a group).
     pub member: Member,
-    /// Role id of `people.capnp`, opaque here; empty = plain member.
+    /// The role text as stored and sent (empty = plain member); [`Membership::typed_role`] reads it
+    /// as the fixed list.
     pub role: String,
     /// `false` when the role is a configured admin role and the person is an agent or not known to
     /// be a human (ADR 0056): the entry stays on record but counts for nothing. Always `true` for
     /// other roles.
     pub in_force: bool,
+}
+
+impl Membership {
+    /// The role as the typed list (ADR 0086); a text outside the list is [`Role::Legacy`].
+    pub fn typed_role(&self) -> Role {
+        Role::parse(&self.role)
+    }
 }
 
 /// A person who belongs to a group, and through whom.

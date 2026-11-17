@@ -19,11 +19,13 @@
 )]
 
 mod error;
+pub mod flow;
 pub mod follow_rules;
 pub mod graph;
 mod invitation_state;
 pub mod mirror;
 pub mod model;
+pub mod protect;
 mod repo;
 pub mod right_flow;
 mod text;
@@ -31,6 +33,7 @@ pub mod traits;
 mod unsupported;
 
 pub use error::{Error, Result};
+pub use flow::MemberFlow;
 pub use graph::Graph;
 pub use invitation_state::Step;
 pub use mirror::{
@@ -38,9 +41,9 @@ pub use mirror::{
     enforce, enforce_closure, plan,
 };
 pub use model::{
-    Cursor, Delegation, Delivery, DeliveryState, EffectiveMember, Group, Invitation,
-    InvitationState, Member, Membership, Offer, Page, ParentRequest, RequestState, Right,
-    RightFlow, Source, SourceState,
+    Cursor, Delegation, Delivery, DeliveryState, EffectiveMember, EffectiveOrigin, Group,
+    Invitation, InvitationState, Member, Membership, NestingMode, Offer, Origin, Page,
+    ParentRequest, RequestKind, RequestState, Right, RightFlow, Role, Source, SourceState,
 };
 pub use repo::{
     CONTEXT, DELEGATION_TYPE, DELIVERY_TYPE, GROUP_TYPE, GroupRepo, INVITATION_TYPE,

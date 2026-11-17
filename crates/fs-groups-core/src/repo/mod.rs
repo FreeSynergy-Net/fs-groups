@@ -18,10 +18,12 @@ mod invitations;
 mod items;
 mod members;
 mod mirror;
+mod modes;
 mod nesting;
 mod notify;
 mod parent_requests;
 mod provide;
+mod roles;
 mod sources;
 mod support;
 

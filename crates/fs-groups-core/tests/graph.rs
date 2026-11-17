@@ -12,6 +12,8 @@ fn group(parents: &[ObjectId]) -> Group {
         name: id.to_string(),
         kind: String::new(),
         parents: parents.to_vec(),
+        parent_modes: std::collections::BTreeMap::default(),
+        default_mode: fs_groups_core::NestingMode::default(),
         right_flow: fs_groups_core::RightFlow::default(),
         envelope,
     }

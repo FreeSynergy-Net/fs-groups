@@ -5,6 +5,8 @@
 
 use fs_objects::ObjectId;
 
+use super::NestingMode;
+
 /// Where a request to become a child stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RequestState {
@@ -34,6 +36,32 @@ impl RequestState {
     }
 }
 
+/// What a request asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RequestKind {
+    /// A new edge `child -> parent`, with the mode of the request.
+    Link,
+    /// A new mode for the existing edge `child -> parent`.
+    ChangeMode,
+}
+
+impl RequestKind {
+    /// Stable text used in the store.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Link => "link",
+            Self::ChangeMode => "change_mode",
+        }
+    }
+
+    /// Inverse of [`RequestKind::as_str`].
+    pub fn parse(s: &str) -> Option<Self> {
+        [Self::Link, Self::ChangeMode]
+            .into_iter()
+            .find(|x| x.as_str() == s)
+    }
+}
+
 /// A group asks to become a child of another. The link exists only once the request is approved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParentRequest {
@@ -47,4 +75,8 @@ pub struct ParentRequest {
     pub requester: String,
     /// Current state.
     pub state: RequestState,
+    /// A new edge or a mode change (requests stored before modes existed are `Link`).
+    pub kind: RequestKind,
+    /// The mode the edge gets once approved (older requests: [`NestingMode::BottomUp`]).
+    pub mode: NestingMode,
 }

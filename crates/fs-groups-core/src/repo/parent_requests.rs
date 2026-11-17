@@ -19,13 +19,27 @@ use super::consts::{AS2_TYPE, CONTEXT, PARENT_REQUEST_TYPE};
 use super::envelope::context;
 use super::handle::{GroupRepo, Writer};
 use crate::error::{Error, Result};
-use crate::model::{Group, ParentRequest, RequestState, Right};
+use crate::model::{Group, NestingMode, ParentRequest, RequestKind, RequestState, Right};
 
 impl GroupRepo {
-    /// `group.nest`: ask for `parent` to become a parent of `child`. Nothing is linked yet. Refused
-    /// when it would close a loop, or when the link exists. Asking again while a request is pending
-    /// returns that request.
+    /// `group.nest`: ask for `parent` to become a parent of `child`, with the mode the parent
+    /// preselects for new children (`default_mode`, [`NestingMode::BottomUp`] unless changed).
+    /// See [`GroupRepo::request_parent_in`].
     pub async fn request_parent(&self, child: ObjectId, parent: ObjectId) -> Result<ParentRequest> {
+        let mode = self.require(parent).await?.default_mode;
+        self.request_parent_in(child, parent, mode).await
+    }
+
+    /// `group.nest`: ask for `parent` to become a parent of `child` with an edge of `mode`. Nothing is
+    /// linked yet. Refused when it would close a loop, or when the link exists (in any mode: change
+    /// it with `request_mode_change`). Asking again while a request is pending returns that request
+    /// (a pending request with another mode is a conflict).
+    pub async fn request_parent_in(
+        &self,
+        child: ObjectId,
+        parent: ObjectId,
+        mode: NestingMode,
+    ) -> Result<ParentRequest> {
         let w = self.writer().await;
         let g = w.require(child).await?;
         w.refuse_cycle(child, parent).await?;
@@ -34,35 +48,7 @@ impl GroupRepo {
                 "{parent} is already a parent of {child}"
             )));
         }
-        if let Some(same) = w
-            .requests_where(&[("child", child), ("parent_of", parent)])
-            .await?
-            .into_iter()
-            .find(|r| r.state == RequestState::Pending)
-        {
-            return Ok(same);
-        }
-        let env = w.fresh_envelope(
-            PARENT_REQUEST_TYPE,
-            &format!("{child} asks {parent} to be its parent"),
-        );
-        let content = json!({
-            "@context": context(), "type": PARENT_REQUEST_TYPE, "fs:child": child.to_string(),
-            "fs:parent": parent.to_string(), "fs:state": RequestState::Pending.as_str(),
-        });
-        let obj = StoredObject::new(env, AS2_TYPE, content)
-            .with_index("child", child.to_string())
-            .with_index("parent_of", parent.to_string())
-            .with_index("state", RequestState::Pending.as_str());
-        let id = obj.envelope.id;
-        w.put(obj).await?;
-        Ok(ParentRequest {
-            id,
-            child,
-            parent,
-            requester: self.actor.clone(),
-            state: RequestState::Pending,
-        })
+        w.new_request(child, parent, RequestKind::Link, mode).await
     }
 
     /// `group.nest`: approve on behalf of the parent. The link is made (the loop rule is checked
@@ -73,11 +59,23 @@ impl GroupRepo {
         let (o, r) = w.pending_request(request).await?;
         w.may_decide_for(r.parent).await?;
         let mut child = w.require(r.child).await?;
-        w.refuse_cycle(r.child, r.parent).await?;
-        if !child.parents.contains(&r.parent) {
-            child.parents.push(r.parent);
-            child = w.save(&child).await?;
+        match r.kind {
+            RequestKind::Link => {
+                w.refuse_cycle(r.child, r.parent).await?;
+                if !child.parents.contains(&r.parent) {
+                    child.parents.push(r.parent);
+                }
+            }
+            RequestKind::ChangeMode if !child.parents.contains(&r.parent) => {
+                return Err(Error::Conflict(format!(
+                    "{} is no longer a parent of {}",
+                    r.parent, r.child
+                )));
+            }
+            RequestKind::ChangeMode => {}
         }
+        child.parent_modes.insert(r.parent, r.mode);
+        child = w.save(&child).await?;
         w.set_request_state(o, RequestState::Approved).await?;
         Ok(child)
     }
@@ -115,6 +113,57 @@ impl GroupRepo {
 }
 
 impl Writer<'_> {
+    /// Store a pending request, or return the pending one of the same kind for the same pair.
+    pub(super) async fn new_request(
+        &self,
+        child: ObjectId,
+        parent: ObjectId,
+        kind: RequestKind,
+        mode: NestingMode,
+    ) -> Result<ParentRequest> {
+        let pending = self
+            .requests_where(&[("child", child), ("parent_of", parent)])
+            .await?
+            .into_iter()
+            .find(|r| r.state == RequestState::Pending && r.kind == kind);
+        if let Some(same) = pending {
+            if same.mode == mode {
+                return Ok(same);
+            }
+            return Err(Error::Conflict(format!(
+                "request {} is pending with mode {}",
+                same.id,
+                same.mode.as_str()
+            )));
+        }
+        let env = self.fresh_envelope(
+            PARENT_REQUEST_TYPE,
+            &format!("{child} asks {parent} to be its parent"),
+        );
+        let content = json!({
+            "@context": context(), "type": PARENT_REQUEST_TYPE, "fs:child": child.to_string(),
+            "fs:parent": parent.to_string(), "fs:state": RequestState::Pending.as_str(),
+            "fs:kind": kind.as_str(), "fs:mode": mode.as_str(),
+        });
+        let obj = StoredObject::new(env, AS2_TYPE, content)
+            .with_index("child", child.to_string())
+            .with_index("parent_of", parent.to_string())
+            .with_index("state", RequestState::Pending.as_str())
+            .with_index("kind", kind.as_str())
+            .with_index("mode", mode.as_str());
+        let id = obj.envelope.id;
+        self.put(obj).await?;
+        Ok(ParentRequest {
+            id,
+            child,
+            parent,
+            requester: self.actor.clone(),
+            state: RequestState::Pending,
+            kind,
+            mode,
+        })
+    }
+
     async fn pending_request(&self, id: ObjectId) -> Result<(StoredObject, ParentRequest)> {
         let (o, r) = self
             .load(id)

@@ -6,12 +6,14 @@
 
 use super::handle::GroupRepo;
 use crate::error::{Error, Result};
+use crate::model::Role;
 use crate::text;
 
 impl GroupRepo {
-    /// Whether `role` counts as admin: its folded form is one of the configured roles.
+    /// Whether `role` counts as admin: manager or owner of the fixed list (ADR 0086), or its folded
+    /// form is one of the configured roles.
     pub(super) fn is_admin_role(&self, role: &str) -> bool {
-        self.admin_roles.contains(&text::fold(role))
+        Role::parse(role).is_admin() || self.admin_roles.contains(&text::fold(role))
     }
 
     /// The host's answer for `person`, asked in canonical spelling. `None`: no answer, or no checker.

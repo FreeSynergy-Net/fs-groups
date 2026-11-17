@@ -25,6 +25,8 @@ fn group(id: ObjectId, flow: RightFlow, parents: Vec<ObjectId>) -> Group {
         name: "g".into(),
         kind: String::new(),
         parents,
+        parent_modes: std::collections::BTreeMap::default(),
+        default_mode: fs_groups_core::NestingMode::default(),
         right_flow: flow,
         envelope: fs_objects::Envelope::new("Group", "x"),
     }

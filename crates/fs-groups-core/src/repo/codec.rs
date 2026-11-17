@@ -6,7 +6,8 @@
 use fs_objects::{ObjectId, StoredObject};
 
 use crate::model::{
-    Delegation, Invitation, InvitationState, Member, Membership, ParentRequest, RequestState, Right,
+    Delegation, Invitation, InvitationState, Member, Membership, NestingMode, ParentRequest,
+    RequestKind, RequestState, Right,
 };
 
 pub(super) fn one<'a>(o: &'a StoredObject, key: &str) -> Option<&'a str> {
@@ -85,5 +86,8 @@ pub(super) fn parent_request(o: &StoredObject) -> Option<ParentRequest> {
         parent: id_of(o, "parent_of")?,
         requester: o.envelope.attributed_to.clone().unwrap_or_default(),
         state: RequestState::parse(one(o, "state")?)?,
+        // requests stored before modes existed are plain links, BottomUp
+        kind: one(o, "kind").map_or(Some(RequestKind::Link), RequestKind::parse)?,
+        mode: one(o, "mode").map_or(Some(NestingMode::default()), NestingMode::parse)?,
     })
 }
