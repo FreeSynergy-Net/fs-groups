@@ -1,0 +1,18 @@
+# Blueprint of fs-groups (schema 2). Minimal: the program and its frontend layout only (ADR 0099). The contract id and the
+# types of groups are NOT written yet: no contract id exists in this repo (open gap, see FEHLENDE-COMPONENTS.md).
+schema = 2
+
+[program]
+name = "groups"
+version = "0.0.2"
+skeleton = "0.1.0"
+capability = "groups"
+summary = { en = "Groups and their members", de = "Gruppen und ihre Mitglieder" }
+description = { en = "Keep groups with members, sub-groups and owners.", de = "Gruppen mit Mitgliedern, Untergruppen und Eigentümern führen." }
+categories = ["Office", "ContactManagement"]
+
+# The layout is the form description of the frontend (ENTSCHEID 9f: forms/<ansicht>.toml, no bindings yet).
+[frontend]
+standard = "list"
+layout = "forms/list.toml"
+covers = "all"
