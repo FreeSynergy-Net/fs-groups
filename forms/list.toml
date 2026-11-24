@@ -21,7 +21,7 @@ place = "nav"
 block = "sidebar"
 
 [[page.block]]
-place = "main"
+place = "head"
 block = "head-bar"
 
 [[page.block]]
