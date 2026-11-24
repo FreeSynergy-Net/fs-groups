@@ -1,0 +1,33 @@
+# layout-nur (placeholder values, no binding, no colour/font). Model: Entra group page (katalog-plan/bilder/groups/vorbild/groups-gruppenseite-vorbild-entra.png)
+schema = 1
+kind = "frontend"
+id = "layout-nur"
+extends = "net.freesynergy.Groups"
+exec = "fs-forms-run"
+title = "groups-layout-title"
+style = "default"
+message = [
+  { key = "groups-layout-title", lang = "de", text = "Gruppen (Platzhalter)" },
+  { key = "groups-layout-title", lang = "en", text = "Groups (placeholder)" },
+]
+
+[[page]]
+page = "detail"
+frame = "app-window"
+navigation = "list-detail"
+
+[[page.block]]
+place = "nav"
+block = "sidebar"
+
+[[page.block]]
+place = "main"
+block = "head-bar"
+
+[[page.block]]
+place = "main"
+block = "section"
+
+[[page.block]]
+place = "members"
+block = "avatar-group"
